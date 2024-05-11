@@ -1,0 +1,713 @@
+---
+title: "harmonization"
+output: html_document
+date: "2023-12-14"
+---
+
+*Harmonize Four Marine Debris Data Sets into One Synthesized Data Set, and Identify Most Common Plastic and Eating and Drinking Items* 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(here) 
+library(tidyverse)
+library(sf)
+library(tmap)
+library(dplyr)
+library(purrr) 
+```
+
+#Load in cleaned CSV files 
+```{r}
+surfrider <- read_csv(here("WorkingData", "CleanedDataFinal", "surfrider_clean.csv")) 
+mdt <- read_csv(here("WorkingData", "CleanedDataFinal", "mdt_clean.csv")) 
+tides <- read_csv(here("WorkingData", "CleanedDataFinal", "tides_clean.csv")) 
+mdmap <- read_csv(here("WorkingData", "CleanedDataFinal", "mdmap_clean.csv")) 
+```
+
+#Add our material type, activity type, and new item category columns and sums to each dataset 
+Manually reclassify each data item in each dataset 
+
+Surfrider 
+```{r}
+###Surfrider - material type
+surfrider_materials <- surfrider %>% 
+  mutate(plastic = rowSums(select(., c("cigarette_butts_number_837", "plastic_bottles_beverage_number_822", "plastic_bags_shopping_grocery_number_820", "plastic_straws_number_832", "plastic_forks_knives_spoons_number_827", "plastic_cups_number_825", "foam_cups_number_824", "foam_take_out_food_containers_number_834", "plastic_lids_yogurt_lids_coffee_lids_etc_number_829", "plastic_food_wrappers_candy_chip_bags_etc_number_826", "balloons_number_889", "disinfectant_wipes_number_2216", "latex_gloves_number_2217", "foam_fragments_larger_than_a_dime_number_1840", "foam_fragments_smaller_than_a_dime_number_842", "plastic_fragments_larger_than_a_dime_number_1841", "plastic_fragments_smaller_than_a_dime_number_843", "nurdles_small_pre_production_plastic_pellets_number_844", "x6_pack_holders_number_819", "plastic_bags_other_zip_lock_trash_etc_number_821", "plastic_bottle_caps_rings_number_823", "plates_foam_number_830", "plates_plastic_number_831", "plastic_stirrers_number_833", "take_out_food_containers_plastic_number_835", "plastic_cigarette_lighters_number_838", "plastic_cigar_tips_number_839", "plastic_tobacco_packaging_wrap_number_840", "vape_cartridges_number_2452", "syringes_number_847", "toothbrushes_number_849", "toothpicks_floss_number_850", "bait_bags_containers_number_852", "large_foam_pieces_number_2454", "fishing_line_1_yard_1_piece_number_854", "light_sticks_number_856", "nets_number_857", "rope_1_yard_1_piece_number_859", "plastic_bottles_non_beverage_like_bleach_cleaners_oil_etc_number_862", "foam_coolers_number_863", "plastic_film_wrapper_non_food_or_unknown_number_864", "zip_ties_number_865", "dog_poop_bags_number_2456", "other_plastic_items_number_1907", "condoms_number_890", "tires_number_891", "other_rubber_latex_items_number_892", "tarps_number_895", "buoys_floats_number_853"))), 
+         
+         glass = rowSums(select(., c("glass_bottles_beverage_number_885", "glass_fragments_number_886", "other_glass_items_number_887"))), 
+         
+         metal = rowSums(select(., c("metal_bottle_caps_number_879", "aluminum_cans_beverage_number_880", "cans_other_metal_number_881", "metal_fragments_number_882", "other_metal_items_number_883"))), 
+         
+         cloth = rowSums(select(., "reusable_cloth_mask_number_2219")), 
+         
+         mixed = rowSums(select(., c("single_use_mask_with_filter_number_2218", "reusable_gloves_number_2220", "single_use_surgical_mask_number_2221", "single_use_weed_containers_number_2453", "diapers_number_846", "tampons_tampon_applicators_number_848", "hooks_sinkers_lures_number_855", "pots_and_traps_number_858", "shotgun_wads_number_2455", "fireworks_number_894", "other_items_number_1908", "juice_boxes_number_828"))), 
+         
+         paper_wood = rowSums(select(., c("paper_bags_number_867", "paper_cigarette_boxes_number_868", "paper_cups_number_869", "paper_wood_fragments_pieces_number_870", "paper_napkins_number_871", "paper_plates_number_872", "paper_straws_number_873", "paper_take_out_food_containers_number_874", "treated_wood_i_e_pallets_not_driftwood_number_875", "wood_coffee_drink_stirrers_number_876", "other_paper_wood_items_number_877"))) 
+         )
+```
+
+```{r}
+### Surfrider - activity
+surfrider_activity <- surfrider_materials %>% 
+  mutate(dumping = rowSums(select(., c("tires_number_891", "treated_wood_i_e_pallets_not_driftwood_number_875"))), 
+         
+         eating.drinking = rowSums(select(., c("plastic_bottles_beverage_number_822", "plastic_bags_shopping_grocery_number_820", "plastic_straws_number_832", "plastic_forks_knives_spoons_number_827", "plastic_cups_number_825", "foam_cups_number_824", "foam_take_out_food_containers_number_834", "plastic_lids_yogurt_lids_coffee_lids_etc_number_829", "plastic_food_wrappers_candy_chip_bags_etc_number_826", "x6_pack_holders_number_819", "plastic_bags_other_zip_lock_trash_etc_number_821", "plastic_bottle_caps_rings_number_823", "plates_foam_number_830", "plates_plastic_number_831", "plastic_stirrers_number_833", "take_out_food_containers_plastic_number_835", "foam_coolers_number_863", "glass_bottles_beverage_number_885", "metal_bottle_caps_number_879", "aluminum_cans_beverage_number_880", "juice_boxes_number_828", "paper_bags_number_867", "paper_cups_number_869", "paper_napkins_number_871", "paper_plates_number_872", "paper_straws_number_873", "paper_take_out_food_containers_number_874", "wood_coffee_drink_stirrers_number_876"))), 
+         
+         fishing = rowSums(select(., c("bait_bags_containers_number_852", "fishing_line_1_yard_1_piece_number_854", "nets_number_857", "rope_1_yard_1_piece_number_859", "buoys_floats_number_853", "hooks_sinkers_lures_number_855", "pots_and_traps_number_858"))), 
+         
+         personal.hygiene = rowSums(select(., c("disinfectant_wipes_number_2216", "latex_gloves_number_2217", "syringes_number_847", "toothbrushes_number_849", "toothpicks_floss_number_850", "condoms_number_890", "reusable_cloth_mask_number_2219", "single_use_mask_with_filter_number_2218", "reusable_gloves_number_2220", "single_use_surgical_mask_number_2221", "diapers_number_846",  "tampons_tampon_applicators_number_848"))), 
+         
+         recreation = rowSums(select(., c("balloons_number_889", "dog_poop_bags_number_2456", "shotgun_wads_number_2455", "fireworks_number_894"))), 
+         
+         smoking = rowSums(select(., c("cigarette_butts_number_837", "plastic_cigarette_lighters_number_838", "plastic_cigar_tips_number_839", "vape_cartridges_number_2452", "single_use_weed_containers_number_2453", "paper_cigarette_boxes_number_868"))), 
+         
+         various = rowSums(select(., c("nurdles_small_pre_production_plastic_pellets_number_844", "foam_fragments_larger_than_a_dime_number_1840", "foam_fragments_smaller_than_a_dime_number_842", "plastic_fragments_larger_than_a_dime_number_1841", "plastic_fragments_smaller_than_a_dime_number_843", "large_foam_pieces_number_2454", "plastic_bottles_non_beverage_like_bleach_cleaners_oil_etc_number_862", "plastic_film_wrapper_non_food_or_unknown_number_864", "zip_ties_number_865", "other_plastic_items_number_1907", "other_rubber_latex_items_number_892", "glass_fragments_number_886", "other_glass_items_number_887", "cans_other_metal_number_881", "metal_fragments_number_882", "other_metal_items_number_883", "other_items_number_1908", "paper_wood_fragments_pieces_number_870", "other_paper_wood_items_number_877", "tarps_number_895", "light_sticks_number_856")))
+         )
+```
+
+```{r}
+### Surfrider - item category
+
+surfrider_standard <- surfrider_activity %>% 
+  mutate(construction = 0, 
+         clothing_fabric = 0, 
+         miscellaneous = rowSums(select(., c( "light_sticks_number_856", "foam_coolers_number_863", "dog_poop_bags_number_2456", "tarps_number_895", "other_items_number_1908"))),
+        paper_wood_products = rowSums(select(., c("paper_wood_fragments_pieces_number_870", "treated_wood_i_e_pallets_not_driftwood_number_875", "other_paper_wood_items_number_877"))), 
+        tires = rowSums(select(., "tires_number_891")), 
+        six_pack_holders = rowSums(select(., "x6_pack_holders_number_819")), 
+        bags_plastic = rowSums(select(., c("plastic_bags_shopping_grocery_number_820", "plastic_bags_other_zip_lock_trash_etc_number_821"))),
+        bags_paper = rowSums(select(., "paper_bags_number_867")), 
+        beverage_containers = rowSums(select(., "juice_boxes_number_828")), 
+        bottle_caps = rowSums(select(., c("plastic_bottle_caps_rings_number_823", "metal_bottle_caps_number_879"))), 
+        bottles = rowSums(select(., c("plastic_bottles_beverage_number_822", "plastic_bottles_non_beverage_like_bleach_cleaners_oil_etc_number_862", "glass_bottles_beverage_number_885"))), 
+        cans = rowSums(select(., c("aluminum_cans_beverage_number_880", "cans_other_metal_number_881"))), 
+        container_closures = rowSums(select(., "plastic_lids_yogurt_lids_coffee_lids_etc_number_829")),
+        foodware = rowSums(select(., c("plastic_cups_number_825", "foam_cups_number_824", "plates_foam_number_830", "plates_plastic_number_831", "paper_cups_number_869", "paper_napkins_number_871", "paper_plates_number_872"))), 
+        straws_stirrers = rowSums(select(., c("plastic_straws_number_832", "plastic_stirrers_number_833", "paper_straws_number_873", "wood_coffee_drink_stirrers_number_876"))), 
+        takeout_food_containers_plastic = rowSums(select(., c("foam_take_out_food_containers_number_834", "take_out_food_containers_plastic_number_835"))), 
+        takeout_food_containers_paper = rowSums(select(., "paper_take_out_food_containers_number_874")), 
+        utensils = rowSums(select(., "plastic_forks_knives_spoons_number_827")), 
+        wrappers = rowSums(select(., c("plastic_food_wrappers_candy_chip_bags_etc_number_826", "plastic_film_wrapper_non_food_or_unknown_number_864"))), 
+        buoys_pots_traps_floats = rowSums(select(., c("buoys_floats_number_853", "pots_and_traps_number_858"))), 
+        fishing_gear = rowSums(select(., c("bait_bags_containers_number_852", "hooks_sinkers_lures_number_855"))),
+        fishing_lines = rowSums(select(., "fishing_line_1_yard_1_piece_number_854")),
+        fishing_net_and_rope = rowSums(select(., c("nets_number_857", "rope_1_yard_1_piece_number_859"))), 
+        diapers = rowSums(select(., "diapers_number_846")), 
+        personal_care_products = rowSums(select(., c("disinfectant_wipes_number_2216", "toothbrushes_number_849", "toothpicks_floss_number_850", "condoms_number_890"))), 
+        ppe = rowSums(select(., c("latex_gloves_number_2217", "single_use_mask_with_filter_number_2218", "reusable_cloth_mask_number_2219", "reusable_gloves_number_2220", "single_use_surgical_mask_number_2221"))), 
+        syringes = rowSums(select(., "syringes_number_847")), 
+        tampons_applicators = rowSums(select(., "tampons_tampon_applicators_number_848")), 
+        balloons = rowSums(select(., "balloons_number_889")),
+        fireworks = rowSums(select(., "fireworks_number_894")), 
+        shotgun_wads_shells = rowSums(select(., "shotgun_wads_number_2455")), 
+        packaging_and_other_smoking = rowSums(select(., c("plastic_tobacco_packaging_wrap_number_840", "single_use_weed_containers_number_2453", "paper_cigarette_boxes_number_868"))), 
+        cigar_tips = rowSums(select(., "plastic_cigar_tips_number_839")), 
+        cigarette_butts = rowSums(select(., "cigarette_butts_number_837")), 
+        e_cigarettes = rowSums(select(., "vape_cartridges_number_2452")), 
+        lighter = rowSums(select(., "plastic_cigarette_lighters_number_838")), 
+        glass_fragments = rowSums(select(., c("glass_fragments_number_886", "other_glass_items_number_887"))), 
+        metal_fragments = rowSums(select(., c("metal_fragments_number_882", "other_metal_items_number_883"))), 
+        packaging = rowSums(select(., "zip_ties_number_865")), 
+        plastic_fragments = rowSums(select(., c("foam_fragments_larger_than_a_dime_number_1840", "foam_fragments_smaller_than_a_dime_number_842", "plastic_fragments_larger_than_a_dime_number_1841", "plastic_fragments_smaller_than_a_dime_number_843", "nurdles_small_pre_production_plastic_pellets_number_844", "large_foam_pieces_number_2454","other_plastic_items_number_1907", "other_rubber_latex_items_number_892"))))
+```
+
+TIDES
+```{r}
+### TIDES - materials
+tides_materials <- tides %>% 
+  mutate(plastic = rowSums(select(., c("grocery_bags_plastic", "other_bags_plastic", "beverage_bottles_plastic", "beverage_sachets_pouches", "bottle_caps_plastic", "cigarette_butts", "cups_plates_foam", "cups_plates_plastic", "food_containers_foam", "food_containers_plastic", "food_wrappers_candy_chips_etc", "straws_stirrers_plastic", "utensils_plastic", "foam_dock_pieces", "tires", "x6_pack_holders", "foam_packaging", "other_plastic_bottles_oil_bleach_etc", "strapping_bands", "balloons", "e_cigarettes", "tobacco_products_lighters_cigar_tips_wrap", "other_plastic_waste", "condoms", "syringes", "plastic_foam_pieces", "fishing_net_pieces", "fishing_line_1_yard_meter_1_piece", "rope_1_yard_meter_1_piece", "other_plastic_foam_packaging", "cigar_tips", "cigarette_lighters", "foam_pieces", "plastic_pieces", "toys", "tobacco_packaging_wrap"))), 
+         
+         glass = rowSums(select(., c("beverage_bottles_glass", "glass_pieces"))), 
+         
+         metal = rowSums(select(., c("beverage_cans", "bottle_caps_metal"))),
+         
+         cloth = rowSums(select(., "clothing")), 
+         
+         mixed = rowSums(select(., c("appliances_refrigerators_washers_etc", "construction_materials", "electronic_waste_phones_batteries", "footwear_shoes_slippers", "other_waste_metal_paper_etc", "cotton_bud_sticks_swabs", "diapers", "gloves_masks_ppe", "tampons_applicators", "fishing_buoys_pots_traps", "fishing_gear_clean_swell", "other_packaging_clean_swell",  "fireworks", "other_trash_clean_swell", "other_tobacco_packaging_lighter_etc", "personal_hygiene_clean_swell", "lines_nets_traps_ropes_etc"))), 
+         
+         paper_wood = rowSums(select(., c("cups_plates_paper", "paper_bags"))) 
+         )
+```
+
+```{r}
+### TIDES - activity
+
+tides_activity <- tides_materials %>% 
+  mutate(dumping = rowSums(select(., c("foam_dock_pieces", "tires", "appliances_refrigerators_washers_etc", "construction_materials"))), 
+         
+         eating.drinking = rowSums(select(., c("grocery_bags_plastic", "other_bags_plastic", "beverage_bottles_plastic", "beverage_sachets_pouches", "bottle_caps_plastic", "cups_plates_foam", "cups_plates_plastic", "food_containers_foam", "food_containers_plastic", "food_wrappers_candy_chips_etc", "straws_stirrers_plastic", "utensils_plastic", "x6_pack_holders", "beverage_bottles_glass", "beverage_cans", "bottle_caps_metal", "cups_plates_paper", "paper_bags"))), 
+         
+         fishing = rowSums(select(., c("lines_nets_traps_ropes_etc", "fishing_net_pieces", "fishing_line_1_yard_meter_1_piece", "rope_1_yard_meter_1_piece", "fishing_buoys_pots_traps", "fishing_gear_clean_swell"))), 
+         
+         personal.hygiene = rowSums(select(., c("condoms", "syringes", "cotton_bud_sticks_swabs", "diapers", "gloves_masks_ppe", "tampons_applicators", "personal_hygiene_clean_swell"))), 
+         
+         recreation = rowSums(select(., c("clothing", "footwear_shoes_slippers", "balloons", "toys", "fireworks"))), 
+         
+         smoking = rowSums(select(., c("cigarette_butts", "e_cigarettes", "tobacco_products_lighters_cigar_tips_wrap", "cigar_tips", "cigarette_lighters", "tobacco_packaging_wrap", "other_tobacco_packaging_lighter_etc"))), 
+         
+         various = rowSums(select(., c("electronic_waste_phones_batteries", "foam_packaging", "other_plastic_bottles_oil_bleach_etc", "strapping_bands", "other_plastic_waste", "plastic_foam_pieces", "other_plastic_foam_packaging", "foam_pieces", "plastic_pieces", "glass_pieces", "other_waste_metal_paper_etc", "other_packaging_clean_swell", "other_trash_clean_swell")))
+         )
+```
+
+```{r}
+### TIDES - item category
+tides_standard <- tides_activity %>% 
+  mutate(construction = rowSums(select(., c("foam_dock_pieces", "construction_materials"))), 
+        clothing_fabric = rowSums(select(., c("clothing", "footwear_shoes_slippers"))),
+        miscellaneous = rowSums(select(., c("appliances_refrigerators_washers_etc", "electronic_waste_phones_batteries", "toys", "other_waste_metal_paper_etc", "other_trash_clean_swell"))), 
+        paper_wood_products = 0, 
+        tires = rowSums(select(., "tires")), 
+        six_pack_holders = rowSums(select(., "x6_pack_holders")), 
+        bags_plastic = rowSums(select(., c("grocery_bags_plastic", "other_bags_plastic"))), 
+        bags_paper = rowSums(select(., "paper_bags")), 
+        beverage_containers = rowSums(select(., "beverage_sachets_pouches")), 
+        bottle_caps = rowSums(select(., c("bottle_caps_metal", "bottle_caps_plastic"))), 
+        bottles = rowSums(select(., c("beverage_bottles_glass", "beverage_bottles_plastic", "other_plastic_bottles_oil_bleach_etc"))), 
+        cans = rowSums(select(., "beverage_cans")), 
+        container_closures = rowSums(select(., "lids_plastic")),
+        foodware = rowSums(select(., c("cups_plates_foam", "cups_plates_paper", "cups_plates_plastic"))), 
+        straws_stirrers = rowSums(select(., "straws_stirrers_plastic")), 
+        takeout_food_containers_plastic = rowSums(select(., c("food_containers_foam", "food_containers_plastic"))), 
+        takeout_food_containers_paper = 0, 
+        utensils = rowSums(select(., "utensils_plastic")), 
+        wrappers = rowSums(select(., "food_wrappers_candy_chips_etc")), 
+        buoys_pots_traps_floats = rowSums(select(., "fishing_buoys_pots_traps")), 
+        fishing_gear = rowSums(select(., c("lines_nets_traps_ropes_etc", "fishing_gear_clean_swell"))),
+        fishing_lines = rowSums(select(., "fishing_line_1_yard_meter_1_piece")),
+        fishing_net_and_rope = rowSums(select(., c("fishing_net_pieces", "rope_1_yard_meter_1_piece"))), 
+        diapers = rowSums(select(., "diapers")), 
+        personal_care_products = rowSums(select(., c("condoms", "cotton_bud_sticks_swabs", "personal_hygiene_clean_swell"))), 
+        ppe = rowSums(select(., "gloves_masks_ppe")), 
+        syringes = rowSums(select(., "syringes")), 
+        tampons_applicators = rowSums(select(., "tampons_applicators")), 
+        balloons = rowSums(select(., "balloons")),
+        fireworks = rowSums(select(., "fireworks")), 
+        shotgun_wads_shells = 0, 
+        packaging_and_other_smoking = rowSums(select(., c("tobacco_products_lighters_cigar_tips_wrap", "tobacco_packaging_wrap", "other_tobacco_packaging_lighter_etc"))), 
+        cigar_tips = rowSums(select(., "cigar_tips")), 
+        cigarette_butts = rowSums(select(., "cigarette_butts")), 
+        e_cigarettes = rowSums(select(., "e_cigarettes")), 
+        lighter = rowSums(select(., "cigarette_lighters")), 
+        glass_fragments = rowSums(select(., "glass_pieces")), 
+        metal_fragments = 0, 
+        packaging = rowSums(select(., c("foam_packaging", "strapping_bands", "other_plastic_foam_packaging", "other_packaging_clean_swell"))), 
+        plastic_fragments = rowSums(select(., c("other_plastic_waste", "plastic_foam_pieces", "foam_pieces", "plastic_pieces"))) 
+        )
+```
+
+MDMAP
+```{r}
+### MDMAP - material
+mdmap_materials <- mdmap %>% 
+  mutate(plastic = rowSums(select(., c("plastic_fragments_film", "plastic_fragments_foamed", "plastic_fragments_hard", "plastic_bags", "plastic_beverage_bottles", "plastic_bottle_or_container_caps", "plastic_cups", "plastic_food_wrappers", "plastic_other_jugs_or_containers", "plastic_straws", "plastic_utensils", "plastic_6_pack_rings", "plastic_cigar_tips", "plastic_cigarettes", "plastic_disposable_cigarette_lighters", "plastic_fishing_lures_and_line", "plastic_rope_and_nets", "plastic_balloons", "plastic_personal_care_products", "plastic_other", "rubber_fragments", "rubber_balloons", "rubber_flip_flops", "rubber_gloves", "rubber_tires", "rubber_other", "cloth_fabric_rope_and_nets", "plastic_other_jugs_or_containers_bait_containers_lids", "plastic_rope_and_nets_yellow_poly_rope_snippets", "plastic_personal_care_products_combs_or_brushes", "plastic_personal_care_products_syringes", "plastic_personal_care_products_toothbrushes", "plastic_other_crab_buoy_tag", "plastic_other_hagfish_trap_cones", "plastic_other_irrigation_parts", "plastic_other_light_sticks", "plastic_other_mesh_bait_bags", "plastic_other_oyster_spacers", "plastic_other_oyster_spacers_oyster_bags", "plastic_other_packing_bands", "plastic_other_pens_pen_caps", "plastic_other_plant_pot_or_trays", "plastic_other_ribbon", "plastic_other_zipties", "rubber_other_rubber_straps", "plastic_other_toys", "plastic_buoys_and_floats"))), 
+         
+         glass = rowSums(select(., c("glass_fragments", "glass_beverage_bottles", "glass_jars", "glass_other", "glass_other_light_bulbs"))), 
+         
+         metal = rowSums(select(., c("metal_fragments", "metal_aerosol_cans", "metal_aluminum_tin_cans", "metal_other", "metal_other_metal_bottle_caps", "metal_other_propane_canisters"))), 
+         
+         cloth = rowSums(select(., c("cloth_fabric_fragments", "cloth_fabric_gloves", "cloth_fabric_towels_rags", "cloth_fabric_other", "cloth_fabric_other_carpet"))), 
+         
+         mixed = rowSums(select(., c("plastic_shotgun_shells_wads", "cloth_fabric_clothing_and_shoes", "other_other", "plastic_other_fireworks", "metal_other_construction_material", "processed_lumber_paper_and_cardboard_fireworks", "other_other_asphalt", "other_other_brick", "other_other_ceramic", "other_other_terracota", "plastic_other_golf_balls_and_tees"))), 
+         
+         paper_wood = rowSums(select(., c("processed_lumber_cardboard_cartons", "processed_lumber_building_material", "processed_lumber_paper_and_cardboard", "processed_lumber_bags", "processed_lumber_other", "processed_lumber_other_creosote_treated_lumber"))) 
+         )
+```
+
+```{r}
+### MDMAP - activity
+mdmap_activity <- mdmap_materials %>% 
+  mutate(dumping = rowSums(select(., c("rubber_tires", "plastic_other_irrigation_parts", "cloth_fabric_other_carpet", "metal_other_construction_material", "other_other_asphalt", "other_other_brick", "processed_lumber_building_material", "processed_lumber_other", "processed_lumber_other_creosote_treated_lumber", "glass_other_light_bulbs"))), 
+         
+         eating.drinking = rowSums(select(., c("plastic_bags", "plastic_beverage_bottles", "plastic_bottle_or_container_caps", "plastic_cups", "plastic_food_wrappers", "plastic_straws", "plastic_utensils", "plastic_6_pack_rings", "glass_beverage_bottles", "glass_jars", "metal_aluminum_tin_cans", "metal_other_metal_bottle_caps", "processed_lumber_bags", "plastic_other_jugs_or_containers"))), 
+         
+         fishing = rowSums(select(., c("plastic_fishing_lures_and_line", "plastic_rope_and_nets", "cloth_fabric_rope_and_nets", "plastic_rope_and_nets_yellow_poly_rope_snippets", "plastic_other_crab_buoy_tag", "plastic_other_hagfish_trap_cones", "plastic_other_mesh_bait_bags", "plastic_other_oyster_spacers", "plastic_other_oyster_spacers_oyster_bags", "plastic_buoys_and_floats"))), 
+         
+         personal.hygiene = rowSums(select(., c("plastic_personal_care_products", "rubber_gloves", "plastic_personal_care_products_combs_or_brushes", "plastic_personal_care_products_syringes", "plastic_personal_care_products_toothbrushes"))), 
+         
+         recreation = rowSums(select(., c("rubber_flip_flops", "cloth_fabric_gloves", "cloth_fabric_towels_rags", "cloth_fabric_clothing_and_shoes", "plastic_balloons", "plastic_other_golf_balls_and_tees", "plastic_shotgun_shells_wads", "plastic_other_fireworks", "plastic_other_toys", "processed_lumber_paper_and_cardboard_fireworks", "plastic_other_ribbon", "cloth_fabric_fragments", "cloth_fabric_other"))), 
+         
+         smoking = rowSums(select(., c("plastic_cigar_tips", "plastic_cigarettes","plastic_disposable_cigarette_lighters"))), 
+         
+         various = rowSums(select(., c("other_other_terracota", "plastic_other_jugs_or_containers_bait_containers_lids", "plastic_fragments_film", "plastic_fragments_foamed", "plastic_fragments_hard", "plastic_other", "rubber_fragments", "rubber_other", "plastic_other_packing_bands", "plastic_other_zipties", "rubber_other_rubber_straps", "glass_fragments", "glass_other", "metal_fragments", "metal_aerosol_cans", "metal_other", "other_other", "processed_lumber_cardboard_cartons", "processed_lumber_paper_and_cardboard", "plastic_other_pens_pen_caps", "plastic_other_plant_pot_or_trays", "metal_other_propane_canisters", "other_other_ceramic", "plastic_other_light_sticks")))
+         )
+```
+
+```{r}
+### MDMAP - item category
+
+mdmap_standard <- mdmap_activity %>% 
+  mutate(construction = rowSums(select(., c("processed_lumber_building_material", "metal_other_construction_material", "other_other_asphalt", "other_other_brick"))), 
+        clothing_fabric = rowSums(select(., c("rubber_flip_flops", "cloth_fabric_fragments", "cloth_fabric_clothing_and_shoes", "cloth_fabric_gloves", "cloth_fabric_towels_rags",  "cloth_fabric_other", "cloth_fabric_other_carpet"))), 
+        miscellaneous = rowSums(select(., c("other_other", "plastic_other_golf_balls_and_tees", "plastic_other_irrigation_parts", "plastic_other_light_sticks", "plastic_other_pens_pen_caps", "plastic_other_plant_pot_or_trays", "plastic_other_ribbon", "plastic_other_toys", "glass_other_light_bulbs", "other_other_ceramic", "other_other_terracota", "plastic_other_jugs_or_containers_bait_containers_lids",  "metal_other_propane_canisters"))), 
+        paper_wood_products = rowSums(select(., c("processed_lumber_paper_and_cardboard", "processed_lumber_other", "processed_lumber_other_creosote_treated_lumber"))), 
+        tires = rowSums(select(., "rubber_tires")), 
+        six_pack_holders = rowSums(select(., "plastic_6_pack_rings")), 
+        bags_plastic = rowSums(select(., "plastic_bags")), 
+        bags_paper = rowSums(select(., "processed_lumber_bags")), 
+        beverage_containers = rowSums(select(., "plastic_other_jugs_or_containers")), 
+        bottle_caps = rowSums(select(., c("plastic_bottle_or_container_caps", "metal_other_metal_bottle_caps"))), 
+        bottles = rowSums(select(., c("plastic_beverage_bottles", "glass_beverage_bottles"))), 
+        cans = rowSums(select(., c("metal_aerosol_cans", "metal_aluminum_tin_cans"))), 
+        container_closures = 0,
+        foodware = rowSums(select(., c("plastic_cups", "glass_jars"))), 
+        straws_stirrers = rowSums(select(., "plastic_straws")), 
+        takeout_food_containers_plastic = 0, 
+        takeout_food_containers_paper = 0, 
+        utensils = rowSums(select(., "plastic_utensils")), 
+        wrappers = rowSums(select(., "plastic_food_wrappers")), 
+        buoys_pots_traps_floats = rowSums(select(., "plastic_buoys_and_floats")), 
+        fishing_gear = rowSums(select(., c("plastic_other_crab_buoy_tag", "plastic_other_hagfish_trap_cones", "plastic_other_mesh_bait_bags", "plastic_other_oyster_spacers", "plastic_other_oyster_spacers_oyster_bags"))),
+        fishing_lines = rowSums(select(., "plastic_fishing_lures_and_line")),
+        fishing_net_and_rope = rowSums(select(., c("plastic_rope_and_nets", "cloth_fabric_rope_and_nets", "plastic_rope_and_nets_yellow_poly_rope_snippets"))), 
+        diapers = 0, 
+        personal_care_products = rowSums(select(., "plastic_personal_care_products", "plastic_personal_care_products_combs_or_brushes", "plastic_personal_care_products_toothbrushes")), 
+        ppe = rowSums(select(., "rubber_gloves")), 
+        syringes = rowSums(select(., "plastic_personal_care_products_syringes")), 
+        tampons_applicators = 0, 
+        balloons = rowSums(select(., c("plastic_balloons", "rubber_balloons"))),
+        fireworks = rowSums(select(., c("plastic_other_fireworks", "processed_lumber_paper_and_cardboard_fireworks"))), 
+        shotgun_wads_shells = rowSums(select(., "plastic_shotgun_shells_wads")), 
+        packaging_and_other_smoking = 0, 
+        cigar_tips = rowSums(select(., "plastic_cigar_tips")), 
+        cigarette_butts = rowSums(select(., "plastic_cigarettes")), 
+        e_cigarettes = 0, 
+        lighter = rowSums(select(., "plastic_disposable_cigarette_lighters")), 
+        glass_fragments = rowSums(select(., c("glass_fragments", "glass_other"))), 
+        metal_fragments = rowSums(select(., c("metal_fragments", "metal_other"))), 
+        packaging = rowSums(select(., c("processed_lumber_cardboard_cartons", "plastic_other_packing_bands", "plastic_other_zipties", "rubber_other_rubber_straps" ))), 
+        plastic_fragments = rowSums(select(., c("plastic_fragments_film", "plastic_fragments_foamed", "plastic_fragments_hard", "plastic_other", "rubber_fragments", "rubber_other"))))
+```
+
+MDT
+```{r}
+### MDT - material
+mdt_materials <- mdt %>% 
+  mutate(plastic = rowSums(select(., c("plastic_plastic_bags", "plastic_foam_or_plastic_cups_or_plates", "plastic_cigarettes_cigars", "plastic_plastic_caps_or_lids", "plastic_plastic_bottle", "plastic_straws", "plastic_plastic_utensils",  "rubber_rubber_gloves", "plastic_plastic_food_wrappers", "plastic_tobacco_packaging_or_lighters", "plastic_plastic_fragments", "fishing_gear_plastic_rope_or_net", "fishing_gear_non_nylon_rope_or_net", "plastic_other_plastic_jugs", "plastic_other_plastic", "plastic_balloon_and_or_string", "plastic_foam_fragment", "plastic_six_pack_rings", "rubber_flip_flops", "rubber_rubber_fragments", "fishing_gear_fishing_lures_and_lines", "plastic_plastic_film", "plastic_personal_care_products", "rubber_tires", "fishing_gear_fishing_line", "plastic_condoms", "fishing_gear_bait_containers", "plastic_foam_or_plastic_food_containers", "plastic_mask", "fishing_gear_fishing_net", "rubber_other_rubber", "plastic_plastic_pellet", "plastic_plastic_strapping_bands_or_zip_ties", "plastic_wipes", "fishing_gear_buoys_and_floats"))), 
+         
+         glass = rowSums(select(., c("glass_glass_bottle", "glass_glass_fragments", "glass_glass_jars", "glass_other_glass", "glass_other_fishing_gear"))), 
+         
+         metal = rowSums(select(., c("metal_metal_bottle_caps_or_tabs", "metal_aluminum_or_tin_cans", "metal_metal_fragments", "metal_aerosol_cans", "metal_other_metal"))), 
+         
+         cloth = rowSums(select(., c("cloth_towels_or_rags", "cloth_non_rubber_gloves", "cloth_fabric_pieces", "cloth_other_cloth"))), 
+         
+         mixed = rowSums(select(., c("other_other", "cloth_clothing_and_shoes", "non_litter_item_test_item", "non_litter_item_organic_waste", "metal_gun_shells", "mixed_materials_coated_paperboard_container", "other_fireworks", "plastic_feminine_hygeine_products"))), 
+         
+         paper_wood = rowSums(select(., c("paper_lumber_paper_and_cardboard", "paper_lumber_paper_food_wrappers", "paper_lumber_paper_bags", "paper_lumber_lumber_building_materials", "paper_lumber_other_paper", "paper_lumber_paper_cups_plates_napkins", "paper_lumber_paper_food_box", "paper_lumber_pallets"))) 
+         )
+```
+
+```{r}
+### MDT - activity
+
+mdt_activity <- mdt_materials %>% 
+  mutate(dumping = rowSums(select(., c("rubber_tires", "paper_lumber_lumber_building_materials", "paper_lumber_pallets"))), 
+         
+         eating.drinking = rowSums(select(., c("plastic_plastic_bags", "plastic_foam_or_plastic_cups_or_plates", "plastic_plastic_caps_or_lids", "plastic_plastic_bottle", "plastic_straws", "plastic_plastic_utensils", "plastic_plastic_food_wrappers", "plastic_six_pack_rings", "plastic_foam_or_plastic_food_containers", "glass_glass_bottle", "glass_glass_jars", "metal_metal_bottle_caps_or_tabs", "metal_aluminum_or_tin_cans", "paper_lumber_paper_food_wrappers", "paper_lumber_paper_bags", "paper_lumber_paper_cups_plates_napkins", "paper_lumber_paper_food_box", "plastic_other_plastic_jugs"))), 
+         
+         fishing = rowSums(select(., c("fishing_gear_plastic_rope_or_net", "fishing_gear_non_nylon_rope_or_net", "fishing_gear_fishing_lures_and_lines", "fishing_gear_fishing_line", "fishing_gear_bait_containers", "fishing_gear_fishing_net", "fishing_gear_buoys_and_floats", "glass_other_fishing_gear"))), 
+         
+         personal.hygiene = rowSums(select(., c("rubber_rubber_gloves", "plastic_personal_care_products", "plastic_condoms", "plastic_feminine_hygeine_products", "plastic_mask", "plastic_wipes"))), 
+         
+         recreation = rowSums(select(., c("plastic_balloon_and_or_string", "metal_gun_shells", "other_fireworks", "rubber_flip_flops", "cloth_towels_or_rags", "cloth_non_rubber_gloves", "cloth_fabric_pieces", "cloth_clothing_and_shoes"))), 
+         
+         smoking = rowSums(select(., c("plastic_cigarettes_cigars", "plastic_tobacco_packaging_or_lighters"))), 
+         
+         various = rowSums(select(., c("plastic_plastic_film", "plastic_plastic_fragments", "plastic_other_plastic", "plastic_foam_fragment", "rubber_rubber_fragments", "rubber_other_rubber", "plastic_plastic_pellet", "plastic_plastic_strapping_bands_or_zip_ties", "glass_glass_fragments", "glass_other_glass", "metal_metal_fragments", "metal_aerosol_cans", "metal_other_metal", "cloth_other_cloth", "other_other", "non_litter_item_test_item", "non_litter_item_organic_waste", "mixed_materials_coated_paperboard_container", "paper_lumber_paper_and_cardboard", "paper_lumber_other_paper")))
+         )
+```
+
+```{r}
+### MDT - item category
+mdt_standard <- mdt_activity %>% 
+  mutate(construction = rowSums(select(., "paper_lumber_lumber_building_materials")), 
+        clothing_fabric = rowSums(select(., c("cloth_towels_or_rags", "cloth_non_rubber_gloves", "cloth_clothing_and_shoes", "cloth_fabric_pieces", "rubber_flip_flops", "cloth_other_cloth"))), 
+        miscellaneous = rowSums(select(., c("other_other", "non_litter_item_test_item", "non_litter_item_organic_waste"))), 
+        paper_wood_products = rowSums(select(., c("paper_lumber_paper_and_cardboard", "paper_lumber_other_paper", "paper_lumber_pallets"))), 
+        tires = rowSums(select(., "rubber_tires")), 
+        six_pack_holders = rowSums(select(., "plastic_six_pack_rings")), 
+        bags_plastic = rowSums(select(., "plastic_plastic_bags")), 
+        bags_paper = rowSums(select(., "paper_lumber_paper_bags")), 
+        beverage_containers = rowSums(select(., "plastic_other_plastic_jugs")), 
+        bottle_caps = rowSums(select(., "metal_metal_bottle_caps_or_tabs")), 
+        bottles = rowSums(select(., c("glass_glass_bottle", "plastic_plastic_bottle"))), 
+        cans = rowSums(select(., c("metal_aluminum_or_tin_cans", "metal_aerosol_cans"))), 
+        container_closures = rowSums(select(., "plastic_plastic_caps_or_lids")),
+        foodware = rowSums(select(., c("plastic_foam_or_plastic_cups_or_plates",  "paper_lumber_paper_cups_plates_napkins", "glass_glass_jars"))), 
+        straws_stirrers = rowSums(select(., "plastic_straws")), 
+        takeout_food_containers_plastic = rowSums(select(., "plastic_foam_or_plastic_food_containers")), 
+        takeout_food_containers_paper = rowSums(select(., "paper_lumber_paper_food_box")), 
+        utensils = rowSums(select(., "plastic_plastic_utensils")), 
+        wrappers = rowSums(select(., c("paper_lumber_paper_food_wrappers", "plastic_plastic_food_wrappers", "plastic_plastic_film"))), 
+        buoys_pots_traps_floats = rowSums(select(., "fishing_gear_buoys_and_floats")), 
+        fishing_gear = rowSums(select(., c("fishing_gear_bait_containers", "glass_other_fishing_gear"))),
+        fishing_lines = rowSums(select(., c("fishing_gear_fishing_lures_and_lines", "fishing_gear_fishing_line"))),
+        fishing_net_and_rope = rowSums(select(., c("fishing_gear_plastic_rope_or_net", "fishing_gear_non_nylon_rope_or_net", "fishing_gear_fishing_net"))), 
+        diapers = 0, 
+        personal_care_products = rowSums(select(., c("plastic_personal_care_products", "plastic_condoms", "plastic_feminine_hygeine_products", "plastic_wipes"))),
+        ppe = rowSums(select(., c("rubber_rubber_gloves", "plastic_mask"))), 
+        syringes = 0, 
+        tampons_applicators = 0, 
+        balloons = rowSums(select(., "plastic_balloon_and_or_string")),
+        fireworks = rowSums(select(., "other_fireworks")), 
+        shotgun_wads_shells = rowSums(select(., "metal_gun_shells")), 
+        packaging_and_other_smoking = rowSums(select(., "plastic_tobacco_packaging_or_lighters")), 
+        cigar_tips = 0, 
+        cigarette_butts = rowSums(select(., "plastic_cigarettes_cigars")), 
+        e_cigarettes = 0, 
+        lighter = 0, 
+        glass_fragments = rowSums(select(., c("glass_glass_fragments", "glass_other_glass"))), 
+        metal_fragments = rowSums(select(., c("metal_metal_fragments", "metal_other_metal"))), 
+        packaging = rowSums(select(., c("mixed_materials_coated_paperboard_container", "plastic_plastic_strapping_bands_or_zip_ties"))), 
+        plastic_fragments = rowSums(select(., c("plastic_plastic_fragments", "plastic_other_plastic", "plastic_foam_fragment", "rubber_rubber_fragments", "rubber_other_rubber", "plastic_plastic_pellet")))
+        )
+```
+
+#Remove all old columns, make all columns identical between all datasets 
+```{r}
+surfrider_harmonized <- surfrider_standard %>%
+  select(-(cigarette_butts_number_837:other_items_number_1908)) 
+
+tides_harmonized <- tides_standard %>%
+  select(-(grocery_bags_plastic:plastic_pieces)) 
+
+mdt_harmonized <- mdt_standard %>%
+  select(-(other_other:plastic_wipes))
+
+mdmap_harmonized <- mdmap_standard %>%
+  select(-(total_plastic_items:other_other_terracota)) 
+
+#standardize the administrative info between the datasets 
+surfrider_harmonized <- surfrider_harmonized %>% 
+  select(-c(type, chapter_type, chapter_state, location_country, location_state, date_of_record, chapter_cid)) %>% 
+  rename(., people = number_volunteers) %>%
+  rename(., location = location_name) %>%
+  rename(., group_name = chapter_name)
+
+tides_harmonized <- tides_harmonized %>% 
+  rename(., id = cleanup_id) %>% 
+  select(-c(zone:environment)) %>% 
+  rename(date = cleanup_date) %>% 
+  rename(total_weight = pounds) %>% 
+  rename(distance_cleaned = distance_mi) %>% 
+  rename(area_cleaned = area_mi) %>% 
+  select(-total_items_collected)
+
+mdt_harmonized <- mdt_harmonized %>% 
+  rename(id = log_index) %>% 
+  rename(date = first_date) %>% 
+  rename(group_name = username) 
+
+mdmap_harmonized <- mdmap_harmonized %>% 
+  rename(location = shoreline_site_name) %>% 
+  select(c(-slope, site_length, total_weight_kg)) %>% 
+  rename(people = num_people_searching_for_debris) 
+```
+
+#Combine the data into our synthesized dataset, making one master dataframe and exporting it for later use
+```{r}
+all_data <- bind_rows(
+  surfrider_harmonized %>% mutate(source = "surfrider"),
+  tides_harmonized %>% mutate(source = "tides"),
+  mdt_harmonized %>% mutate(source = "mdt"),
+  mdmap_harmonized %>% mutate(source = "mdmap")
+)
+
+#export as CSV  
+write.csv(all_data, file = "Outputs/all_data_combined.csv", row.names = FALSE)
+
+```
+#Using original datasets, find the items from each dataset that contribute to the eating and drinking source activity category 
+This category makes up the greatest percentage of debris, so this information gives insight into what specific items are the most common within eating and drinking activities 
+
+Surfrider 
+```{r}
+#use surfrider_standard to find the most common surfrider item categories in the eating and drinking category 
+
+#only want to keep the columns with eating and drinking 
+surfrider_eating_drinking <- surfrider_standard %>% 
+  select(c("plastic_bottles_beverage_number_822", "plastic_bags_shopping_grocery_number_820", "plastic_straws_number_832", "plastic_forks_knives_spoons_number_827", "plastic_cups_number_825", "foam_cups_number_824", "foam_take_out_food_containers_number_834", "plastic_lids_yogurt_lids_coffee_lids_etc_number_829", "plastic_food_wrappers_candy_chip_bags_etc_number_826", "x6_pack_holders_number_819", "plastic_bags_other_zip_lock_trash_etc_number_821", "plastic_bottle_caps_rings_number_823", "plates_foam_number_830", "plates_plastic_number_831", "plastic_stirrers_number_833", "take_out_food_containers_plastic_number_835", "foam_coolers_number_863", "glass_bottles_beverage_number_885", "metal_bottle_caps_number_879", "aluminum_cans_beverage_number_880", "juice_boxes_number_828", "paper_bags_number_867", "paper_cups_number_869", "paper_napkins_number_871", "paper_plates_number_872", "paper_straws_number_873", "paper_take_out_food_containers_number_874", "wood_coffee_drink_stirrers_number_876"))
+
+#sum each eating and drinking column 
+surfrider_eating_drinking_sums <- colSums(surfrider_eating_drinking, na.rm = TRUE)
+
+#return the top five columns 
+surfrider_top5 <- names(sort(surfrider_eating_drinking_sums, decreasing = TRUE))[1:5]
+print(surfrider_top5)
+
+#find the percentages of the top 5 categories 
+surfrider_total_eating_drinking <- sum(as.matrix(surfrider_eating_drinking), na.rm = TRUE)
+surfrider_total <- 10031
+
+plastic_food_wrappers <- sum(surfrider_eating_drinking$plastic_food_wrappers_candy_chip_bags_etc_number_826, na.rm = TRUE)
+plastic_bottle_caps_rings <- sum(surfrider_eating_drinking$plastic_bottle_caps_rings_number_823, na.rm = TRUE)
+glass_bottle_beverage <- sum(surfrider_eating_drinking$glass_bottles_beverage_number_885, na.rm = TRUE)
+metal_bottle_caps <- sum(surfrider_eating_drinking$metal_bottle_caps_number_879, na.rm = TRUE)
+paper_napkins <- sum(surfrider_eating_drinking$paper_napkins_number_871, na.rm = TRUE)
+
+perc_food <- plastic_food_wrappers/surfrider_total 
+perc_bottle_caps <- plastic_bottle_caps_rings/surfrider_total
+perc_glass <- glass_bottle_beverage/surfrider_total
+perc_metal <- metal_bottle_caps/surfrider_total
+perc_napkins <- paper_napkins/surfrider_total 
+
+#make a summary dataframe 
+surfrider_eating_drinking_summary <- data.frame("item" = c("plastic_food_wrappers", "plastic_bottle_caps_rings", "glass_bottle_beverage", "metal_bottle_caps", "paper_napkins"), 
+                                                "count" = c(plastic_food_wrappers, plastic_bottle_caps_rings, glass_bottle_beverage, metal_bottle_caps, paper_napkins), 
+                                                "percentage" = c(perc_food, perc_bottle_caps, perc_glass, perc_metal, perc_napkins)) 
+```
+TIDES 
+```{r}
+#use tides_standard to find the most common tides item categories in the eating and drinking category 
+
+#only want to keep the columns with eating and drinking 
+tides_eating_drinking <- tides_standard %>% 
+  select(c("grocery_bags_plastic", "other_bags_plastic", "beverage_bottles_plastic", "beverage_sachets_pouches", "bottle_caps_plastic", "cups_plates_foam", "cups_plates_plastic", "food_containers_foam", "food_containers_plastic", "food_wrappers_candy_chips_etc", "straws_stirrers_plastic", "utensils_plastic", "x6_pack_holders", "beverage_bottles_glass", "beverage_cans", "bottle_caps_metal", "cups_plates_paper", "paper_bags"))
+
+#sum each eating and drinking column 
+tides_eating_drinking_sums <- colSums(tides_eating_drinking, na.rm = TRUE)
+
+#return the top five columns 
+tides_top5 <- names(sort(tides_eating_drinking_sums, decreasing = TRUE))[1:5]
+print(tides_top5)
+
+#find the percentages of the top 5 categories 
+tides_total_eating_drinking <- sum(as.matrix(tides_eating_drinking), na.rm = TRUE)
+tides_total <- 89965
+
+food_wrappers_candy <- sum(tides_eating_drinking$food_wrappers_candy_chips_etc, na.rm = TRUE)
+bottle_caps_plastic <- sum(tides_eating_drinking$bottle_caps_plastic, na.rm = TRUE)
+bottle_caps_metal <- sum(tides_eating_drinking$bottle_caps_metal, na.rm = TRUE)
+beverage_bottles_glass <- sum(tides_eating_drinking$beverage_bottles_glass, na.rm = TRUE)
+beverage_bottles_plastic <- sum(tides_eating_drinking$beverage_bottles_plastic, na.rm = TRUE)
+
+perc_food_wrappers <- food_wrappers_candy/tides_total 
+perc_bottle_caps_plastic <- bottle_caps_plastic/tides_total
+perc_bottle_caps_metal <- bottle_caps_metal/tides_total
+perc_bottles_glass <- beverage_bottles_glass/tides_total
+perc_bottles_plastic <- beverage_bottles_plastic/tides_total 
+
+#make a summary dataframe 
+tides_eating_drinking_summary <- data.frame("item" = c("food_wrappers_candy_chips_etc", "bottle_caps_plastic", "bottle_caps_metal",  "beverage_bottles_glass", "beverage_bottles_plastic"), 
+                                                "count" = c(food_wrappers_candy, bottle_caps_plastic, bottle_caps_metal, beverage_bottles_glass, beverage_bottles_plastic), 
+                                                "percentage" = c(perc_food_wrappers, perc_bottle_caps_plastic, perc_bottle_caps_metal, perc_bottles_glass, perc_bottles_plastic)) 
+```
+MDMAP
+```{r}
+#use mdmap_standard to find the most common mdmap item categories in the eating and drinking category 
+
+#only want to keep the columns with eating and drinking 
+mdmap_eating_drinking <- mdmap_standard %>% 
+  select(c("plastic_bags", "plastic_beverage_bottles", "plastic_bottle_or_container_caps", "plastic_cups", "plastic_food_wrappers", "plastic_straws", "plastic_utensils", "plastic_6_pack_rings", "glass_beverage_bottles", "glass_jars", "metal_aluminum_tin_cans", "metal_other_metal_bottle_caps", "processed_lumber_bags", "plastic_other_jugs_or_containers")) 
+
+#sum each eating and drinking column 
+mdmap_eating_drinking_sums <- colSums(mdmap_eating_drinking, na.rm = TRUE)
+
+#return the top five columns 
+mdmap_top5 <- names(sort(mdmap_eating_drinking_sums, decreasing = TRUE))[1:5]
+print(mdmap_top5)
+
+#find the percentages of the top 5 categories 
+mdmap_total_eating_drinking <- sum(as.matrix(mdmap_eating_drinking), na.rm = TRUE)
+mdmap_total <- 46
+
+plastic_bottle_or_container_caps <- sum(mdmap_eating_drinking$plastic_bottle_or_container_caps, na.rm = TRUE)
+plastic_food_wrappers <- sum(mdmap_eating_drinking$plastic_food_wrappers, na.rm = TRUE)
+plastic_beverage_bottles <- sum(mdmap_eating_drinking$plastic_beverage_bottles, na.rm = TRUE)
+plastic_other_jugs_or_containers <- sum(mdmap_eating_drinking$plastic_other_jugs_or_containers, na.rm = TRUE)
+plastic_cups <- sum(mdmap_eating_drinking$plastic_cups, na.rm = TRUE)
+
+perc_plastic_bottle_or_container_caps <- plastic_bottle_or_container_caps/mdmap_total 
+perc_plastic_food_wrappers <- plastic_food_wrappers/mdmap_total
+perc_plastic_beverage_bottles <- plastic_beverage_bottles/mdmap_total
+perc_plastic_other_jugs_or_containers <- plastic_other_jugs_or_containers/mdmap_total
+perc_plastic_cups <- plastic_cups/mdmap_total 
+
+#make a summary dataframe 
+mdmap_eating_drinking_summary <- data.frame("item" = c("plastic_bottle_or_container_caps", "plastic_food_wrappers", "plastic_beverage_bottles", "plastic_other_jugs_or_containers", "plastic_cups"), 
+                                                "count" = c(plastic_bottle_or_container_caps, plastic_food_wrappers, plastic_beverage_bottles, plastic_other_jugs_or_containers, plastic_cups), 
+                                                "percentage" = c(perc_plastic_bottle_or_container_caps, perc_plastic_food_wrappers, perc_plastic_beverage_bottles, perc_plastic_other_jugs_or_containers, perc_plastic_cups)) 
+```
+MDT
+```{r}
+#use mdt_standard to find the most common mdt item categories in the eating and drinking category 
+
+#only want to keep the columns with eating and drinking 
+mdt_eating_drinking <- mdt_standard %>% 
+  select(c("plastic_plastic_bags", "plastic_foam_or_plastic_cups_or_plates", "plastic_plastic_caps_or_lids", "plastic_plastic_bottle", "plastic_straws", "plastic_plastic_utensils", "plastic_plastic_food_wrappers", "plastic_six_pack_rings", "plastic_foam_or_plastic_food_containers", "glass_glass_bottle", "glass_glass_jars", "metal_metal_bottle_caps_or_tabs", "metal_aluminum_or_tin_cans", "paper_lumber_paper_food_wrappers", "paper_lumber_paper_bags", "paper_lumber_paper_cups_plates_napkins", "paper_lumber_paper_food_box", "plastic_other_plastic_jugs"))
+
+#sum each eating and drinking column 
+mdt_eating_drinking_sums <- colSums(mdt_eating_drinking, na.rm = TRUE)
+
+#return the top five columns 
+mdt_top5 <- names(sort(mdt_eating_drinking_sums, decreasing = TRUE))[1:5]
+print(mdt_top5)
+
+#find the percentages of the top 5 categories 
+mdt_total_eating_drinking <- sum(as.matrix(mdt_eating_drinking), na.rm = TRUE)
+mdt_total <- 600
+
+plastic_plastic_food_wrappers <- sum(mdt_eating_drinking$plastic_plastic_food_wrappers, na.rm = TRUE)
+plastic_plastic_caps_or_lids <- sum(mdt_eating_drinking$plastic_plastic_caps_or_lids, na.rm = TRUE)
+plastic_plastic_bags <- sum(mdt_eating_drinking$plastic_plastic_bags, na.rm = TRUE)
+paper_lumber_paper_cups_plates_napkins <- sum(mdt_eating_drinking$paper_lumber_paper_cups_plates_napkins, na.rm = TRUE)
+plastic_plastic_bottle <- sum(mdt_eating_drinking$plastic_plastic_bottle, na.rm = TRUE)
+
+perc_plastic_plastic_food_wrappers <- plastic_plastic_food_wrappers/mdt_total 
+perc_plastic_plastic_caps_or_lids <- plastic_plastic_caps_or_lids/mdt_total
+perc_plastic_plastic_bags <- plastic_plastic_bags/mdt_total
+perc_paper_lumber_paper_cups_plates_napkins <- paper_lumber_paper_cups_plates_napkins/mdt_total
+perc_plastic_plastic_bottle <- plastic_plastic_bottle/mdt_total 
+
+#make a summary dataframe 
+mdt_eating_drinking_summary <- data.frame("item" = c("plastic_plastic_food_wrappers", "plastic_plastic_caps_or_lids", "plastic_plastic_bags",  "paper_lumber_paper_cups_plates_napkins", "beverage_bottles_plastic"), 
+                                                "count" = c(plastic_plastic_food_wrappers, plastic_plastic_caps_or_lids, plastic_plastic_bags, paper_lumber_paper_cups_plates_napkins, plastic_plastic_bottle), 
+                                                "percentage" = c(perc_plastic_plastic_food_wrappers, perc_plastic_plastic_caps_or_lids, perc_plastic_plastic_bags, perc_paper_lumber_paper_cups_plates_napkins, perc_plastic_plastic_bottle)) 
+```
+
+#Using original datasets, find the items from each dataset that contribute to the plastic material type category 
+This category makes up the greatest percentage of debris, so this information gives insight into what specific items are the most common within the plastic category 
+
+Surfrider
+```{r}
+#use surfrider_standard to find the most common surfrider item categories in the plastic category 
+
+#only want to keep the columns with plastic  
+surfrider_plastic <- surfrider_standard %>% 
+  select(c("cigarette_butts_number_837", "plastic_bottles_beverage_number_822", "plastic_bags_shopping_grocery_number_820", "plastic_straws_number_832", "plastic_forks_knives_spoons_number_827", "plastic_cups_number_825", "foam_cups_number_824", "foam_take_out_food_containers_number_834", "plastic_lids_yogurt_lids_coffee_lids_etc_number_829", "plastic_food_wrappers_candy_chip_bags_etc_number_826", "balloons_number_889", "disinfectant_wipes_number_2216", "latex_gloves_number_2217", "foam_fragments_larger_than_a_dime_number_1840", "foam_fragments_smaller_than_a_dime_number_842", "plastic_fragments_larger_than_a_dime_number_1841", "plastic_fragments_smaller_than_a_dime_number_843", "nurdles_small_pre_production_plastic_pellets_number_844", "x6_pack_holders_number_819", "plastic_bags_other_zip_lock_trash_etc_number_821", "plastic_bottle_caps_rings_number_823", "plates_foam_number_830", "plates_plastic_number_831", "plastic_stirrers_number_833", "take_out_food_containers_plastic_number_835", "plastic_cigarette_lighters_number_838", "plastic_cigar_tips_number_839", "plastic_tobacco_packaging_wrap_number_840", "vape_cartridges_number_2452", "syringes_number_847", "toothbrushes_number_849", "toothpicks_floss_number_850", "bait_bags_containers_number_852", "large_foam_pieces_number_2454", "fishing_line_1_yard_1_piece_number_854", "light_sticks_number_856", "nets_number_857", "rope_1_yard_1_piece_number_859", "plastic_bottles_non_beverage_like_bleach_cleaners_oil_etc_number_862", "foam_coolers_number_863", "plastic_film_wrapper_non_food_or_unknown_number_864", "zip_ties_number_865", "dog_poop_bags_number_2456", "other_plastic_items_number_1907", "condoms_number_890", "tires_number_891", "other_rubber_latex_items_number_892", "tarps_number_895", "buoys_floats_number_853"))
+
+#sum each plastic column 
+surfrider_plastic_sums <- colSums(surfrider_plastic, na.rm = TRUE)
+
+#return the top five columns 
+surfrider_top5plastic <- names(sort(surfrider_plastic_sums, decreasing = TRUE))[1:5]
+print(surfrider_top5plastic)
+
+#find the percentages of the top 5 categories 
+surfrider_total_plastic_df <- sum(as.matrix(surfrider_plastic), na.rm = TRUE)
+surfrider_total_plastic <- 18448
+
+cigarette_butts_number_837 <- sum(surfrider_plastic$cigarette_butts_number_837, na.rm = TRUE)
+plastic_food_wrappers_candy_chip_bags_etc_number_826 <- sum(surfrider_plastic$plastic_food_wrappers_candy_chip_bags_etc_number_826, na.rm = TRUE)
+plastic_fragments_larger_than_a_dime_number_1841 <- sum(surfrider_plastic$plastic_fragments_larger_than_a_dime_number_1841, na.rm = TRUE)
+plastic_fragments_smaller_than_a_dime_number_843 <- sum(surfrider_plastic$plastic_fragments_smaller_than_a_dime_number_843, na.rm = TRUE)
+plastic_bottle_caps_rings_number_823 <- sum(surfrider_plastic$plastic_bottle_caps_rings_number_823, na.rm = TRUE)
+
+perc_cigarette_butts_number_837 <- cigarette_butts_number_837/surfrider_total_plastic
+perc_plastic_food_wrappers_candy_chip_bags_etc_number_826 <- plastic_food_wrappers_candy_chip_bags_etc_number_826/surfrider_total_plastic
+perc_plastic_fragments_larger_than_a_dime_number_1841 <- plastic_fragments_larger_than_a_dime_number_1841/surfrider_total_plastic
+perc_plastic_fragments_smaller_than_a_dime_number_843 <- plastic_fragments_smaller_than_a_dime_number_843/surfrider_total_plastic
+perc_plastic_bottle_caps_rings_number_823 <- plastic_bottle_caps_rings_number_823/surfrider_total_plastic 
+
+#make a summary dataframe 
+surfrider_plastic_summary <- data.frame("item" = c("cigarette_butts", "food_wrappers", "fragments_larger_than_a_dime", "fragments_smaller_than_a_dime", "bottle_caps_rings"), 
+                                                "count" = c(cigarette_butts_number_837, plastic_food_wrappers_candy_chip_bags_etc_number_826, plastic_fragments_larger_than_a_dime_number_1841, plastic_fragments_smaller_than_a_dime_number_843, plastic_bottle_caps_rings_number_823), 
+                                                "percentage" = c(perc_cigarette_butts_number_837, perc_plastic_food_wrappers_candy_chip_bags_etc_number_826, perc_plastic_fragments_larger_than_a_dime_number_1841, perc_plastic_fragments_smaller_than_a_dime_number_843, perc_plastic_bottle_caps_rings_number_823)) 
+```
+TIDES
+```{r}
+#use tides_standard to find the most common tides item categories in the plastic category 
+
+#only want to keep the columns with plastic 
+tides_plastic <- tides_standard %>% 
+  select(c("grocery_bags_plastic", "other_bags_plastic", "beverage_bottles_plastic", "beverage_sachets_pouches", "bottle_caps_plastic", "cigarette_butts", "cups_plates_foam", "cups_plates_plastic", "food_containers_foam", "food_containers_plastic", "food_wrappers_candy_chips_etc", "straws_stirrers_plastic", "utensils_plastic", "foam_dock_pieces", "tires", "x6_pack_holders", "foam_packaging", "other_plastic_bottles_oil_bleach_etc", "strapping_bands", "balloons", "e_cigarettes", "tobacco_products_lighters_cigar_tips_wrap", "other_plastic_waste", "condoms", "syringes", "plastic_foam_pieces", "fishing_net_pieces", "fishing_line_1_yard_meter_1_piece", "rope_1_yard_meter_1_piece", "other_plastic_foam_packaging", "cigar_tips", "cigarette_lighters", "foam_pieces", "plastic_pieces", "toys", "tobacco_packaging_wrap"))
+
+#sum each plastic column 
+tides_plastic_sums <- colSums(tides_plastic, na.rm = TRUE)
+
+#return the top five columns 
+tides_top5plastic <- names(sort(tides_plastic_sums, decreasing = TRUE))[1:5]
+print(tides_top5plastic)
+
+#find the percentages of the top 5 categories 
+tides_total_plastic_df <- sum(as.matrix(tides_plastic), na.rm = TRUE)
+tides_total_plastic <- 192630
+
+cigarette_butts_tides <- sum(tides_plastic$cigarette_butts, na.rm = TRUE)
+plastic_pieces <- sum(tides_plastic$plastic_pieces, na.rm = TRUE)
+food_wrappers_candy_chips_etc <- sum(tides_plastic$food_wrappers_candy_chips_etc, na.rm = TRUE)
+bottle_caps_plastic <- sum(tides_plastic$bottle_caps_plastic, na.rm = TRUE)
+beverage_bottles_plastic <- sum(tides_plastic$beverage_bottles_plastic, na.rm = TRUE)
+
+perc_cigarette_butts_tides <- cigarette_butts_tides/tides_total_plastic
+perc_plastic_pieces <- plastic_pieces/tides_total_plastic
+perc_food_wrappers_candy_chips_etc <- food_wrappers_candy_chips_etc/tides_total_plastic
+perc_bottle_caps_plastic <- bottle_caps_plastic/tides_total_plastic
+perc_beverage_bottles_plastic <- beverage_bottles_plastic/tides_total_plastic 
+
+#make a summary dataframe 
+tides_plastic_summary <- data.frame("item" = c("cigarette_butts", "plastic_pieces", "food_wrappers", "bottle_caps", "beverage_bottles"), 
+                                                "count" = c(cigarette_butts_tides, plastic_pieces, food_wrappers_candy_chips_etc, bottle_caps_plastic, beverage_bottles_plastic), 
+                                                "percentage" = c(perc_cigarette_butts_tides, perc_plastic_pieces, perc_food_wrappers_candy_chips_etc, perc_bottle_caps_plastic, perc_beverage_bottles_plastic)) 
+```
+MDT
+```{r}
+#use mdt_standard to find the most common mdt item categories in the plastic category 
+
+#only want to keep the columns with plastic  
+mdt_plastic <- mdt_standard %>% 
+  select(c("plastic_plastic_bags", "plastic_foam_or_plastic_cups_or_plates", "plastic_cigarettes_cigars", "plastic_plastic_caps_or_lids", "plastic_plastic_bottle", "plastic_straws", "plastic_plastic_utensils",  "rubber_rubber_gloves", "plastic_plastic_food_wrappers", "plastic_tobacco_packaging_or_lighters", "plastic_plastic_fragments", "fishing_gear_plastic_rope_or_net", "fishing_gear_non_nylon_rope_or_net", "plastic_other_plastic_jugs", "plastic_other_plastic", "plastic_balloon_and_or_string", "plastic_foam_fragment", "plastic_six_pack_rings", "rubber_flip_flops", "rubber_rubber_fragments", "fishing_gear_fishing_lures_and_lines", "plastic_plastic_film", "plastic_personal_care_products", "rubber_tires", "fishing_gear_fishing_line", "plastic_condoms", "fishing_gear_bait_containers", "plastic_foam_or_plastic_food_containers", "plastic_mask", "fishing_gear_fishing_net", "rubber_other_rubber", "plastic_plastic_pellet", "plastic_plastic_strapping_bands_or_zip_ties", "plastic_wipes", "fishing_gear_buoys_and_floats"))
+
+#sum each plastic column 
+mdt_plastic_sums <- colSums(mdt_plastic, na.rm = TRUE)
+
+#return the top five columns 
+mdt_top5plastic <- names(sort(mdt_plastic_sums, decreasing = TRUE))[1:5]
+print(mdt_top5plastic)
+
+#find the percentages of the top 5 categories 
+mdt_total_plastic_df <- sum(as.matrix(mdt_plastic), na.rm = TRUE)
+mdt_total_plastic <- 1573
+
+plastic_plastic_fragments <- sum(mdt_plastic$plastic_plastic_fragments, na.rm = TRUE)
+plastic_plastic_food_wrappers <- sum(mdt_plastic$plastic_plastic_food_wrappers, na.rm = TRUE)
+plastic_cigarettes_cigars <- sum(mdt_plastic$plastic_cigarettes_cigars, na.rm = TRUE)
+plastic_plastic_caps_or_lids <- sum(mdt_plastic$plastic_plastic_caps_or_lids, na.rm = TRUE)
+plastic_foam_fragment <- sum(mdt_plastic$plastic_foam_fragment, na.rm = TRUE)
+
+perc_plastic_plastic_fragments <- plastic_plastic_fragments/mdt_total_plastic
+perc_plastic_plastic_food_wrappers <- plastic_plastic_food_wrappers/mdt_total_plastic
+perc_plastic_cigarettes_cigars <- plastic_cigarettes_cigars/mdt_total_plastic
+perc_plastic_plastic_caps_or_lids <- plastic_plastic_caps_or_lids/mdt_total_plastic
+perc_plastic_foam_fragment <- plastic_foam_fragment/mdt_total_plastic 
+
+#make a summary dataframe 
+mdt_plastic_summary <- data.frame("item" = c("plastic_fragments", "food_wrappers", "cigarettes_and_cigars", "caps_or_lids", "foam_fragments"), 
+                                                "count" = c(plastic_plastic_fragments, plastic_plastic_food_wrappers, plastic_cigarettes_cigars, plastic_plastic_caps_or_lids, plastic_foam_fragment), 
+                                                "percentage" = c(perc_plastic_plastic_fragments, perc_plastic_plastic_food_wrappers, perc_plastic_cigarettes_cigars, perc_plastic_plastic_caps_or_lids, perc_plastic_foam_fragment)) 
+```
+MDMAP
+```{r}
+#use mdmap_standard to find the most common mdmap item categories in the plastic category 
+
+#only want to keep the columns with plastic
+mdmap_plastic <- mdmap_standard %>% 
+  select(c("plastic_fragments_film", "plastic_fragments_foamed", "plastic_fragments_hard", "plastic_bags", "plastic_beverage_bottles", "plastic_bottle_or_container_caps", "plastic_cups", "plastic_food_wrappers", "plastic_other_jugs_or_containers", "plastic_straws", "plastic_utensils", "plastic_6_pack_rings", "plastic_cigar_tips", "plastic_cigarettes", "plastic_disposable_cigarette_lighters", "plastic_fishing_lures_and_line", "plastic_rope_and_nets", "plastic_balloons", "plastic_personal_care_products", "plastic_other", "rubber_fragments", "rubber_balloons", "rubber_flip_flops", "rubber_gloves", "rubber_tires", "rubber_other", "cloth_fabric_rope_and_nets", "plastic_other_jugs_or_containers_bait_containers_lids", "plastic_rope_and_nets_yellow_poly_rope_snippets", "plastic_personal_care_products_combs_or_brushes", "plastic_personal_care_products_syringes", "plastic_personal_care_products_toothbrushes", "plastic_other_crab_buoy_tag", "plastic_other_hagfish_trap_cones", "plastic_other_irrigation_parts", "plastic_other_light_sticks", "plastic_other_mesh_bait_bags", "plastic_other_oyster_spacers", "plastic_other_oyster_spacers_oyster_bags", "plastic_other_packing_bands", "plastic_other_pens_pen_caps", "plastic_other_plant_pot_or_trays", "plastic_other_ribbon", "plastic_other_zipties", "rubber_other_rubber_straps", "plastic_other_toys", "plastic_buoys_and_floats"))
+
+#sum each plastic column 
+mdmap_plastic_sums <- colSums(mdmap_plastic, na.rm = TRUE)
+
+#return the top five columns 
+mdmap_top5plastic <- names(sort(mdmap_plastic_sums, decreasing = TRUE))[1:5]
+print(mdmap_top5plastic)
+
+#find the percentages of the top 5 categories 
+mdmap_total_plastic_df <- sum(as.matrix(mdmap_plastic), na.rm = TRUE)
+mdmap_total_plastic <- 185
+
+plastic_fragments_foamed <- sum(mdmap_plastic$plastic_fragments_foamed, na.rm = TRUE)
+plastic_fragments_hard <- sum(mdmap_plastic$plastic_fragments_hard, na.rm = TRUE)
+plastic_bottle_or_container_caps <- sum(mdmap_plastic$plastic_bottle_or_container_caps, na.rm = TRUE)
+plastic_fragments_film <- sum(mdmap_plastic$plastic_fragments_film, na.rm = TRUE)
+plastic_food_wrappers<- sum(mdmap_plastic$plastic_food_wrappers, na.rm = TRUE)
+
+perc_plastic_fragments_foamed <- plastic_fragments_foamed/mdmap_total_plastic
+perc_plastic_fragments_hard <- plastic_fragments_hard/mdmap_total_plastic
+perc_plastic_bottle_or_container_caps <- plastic_bottle_or_container_caps/mdmap_total_plastic
+perc_plastic_fragments_film <- plastic_fragments_film/mdmap_total_plastic
+perc_plastic_food_wrappers <- plastic_food_wrappers/mdmap_total_plastic 
+
+#make a summary dataframe 
+mdmap_plastic_summary <- data.frame("item" = c("foam_fragments", "hard_plastic_fragments", "bottle_container_caps", "plastic_film_fragments", "food_wrappers"), 
+                                                "count" = c(plastic_fragments_foamed, plastic_fragments_hard, plastic_bottle_or_container_caps, plastic_fragments_film, plastic_food_wrappers), 
+                                                "percentage" = c(perc_plastic_fragments_foamed, perc_plastic_fragments_hard, perc_plastic_bottle_or_container_caps, perc_plastic_fragments_film, perc_plastic_food_wrappers)) 
+```
+

@@ -1,0 +1,3 @@
+list_name,master_item_name,master_material,itemname,material,quantity,description,latitude,longitude,altitude,radius,location,timestamp,dt,project_name,username,manual_upload,event_name,id,log_index
+"Primary List","Foam Fragment","PLASTIC","Foam fragments","PLASTIC","1","","34.47076576396","-120.22824347019","","-1","Goleta, US","20230922195448","2023-09-22 00:00:00","","gaviotacoast","1","Gaviota State Park","2634529","69748"
+"Primary List","Aluminum or Tin Cans","METAL","Aluminum or tin cans","METAL","2","","34.470678695805","-120.22791355848","","-1","","20230922195259","2023-09-22 00:00:00","","gaviotacoast","1","Gaviota State Park","2634376","69746"

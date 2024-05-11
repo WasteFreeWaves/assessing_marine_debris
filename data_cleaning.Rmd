@@ -1,0 +1,697 @@
+---
+title: "Data_cleaning"
+date: "2023-07-25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(here) 
+library(tidyverse)
+library(sf)
+library(tmap)
+library(dplyr)
+library(purrr) 
+```
+
+### Part 1: Surfrider Data
+```{r}
+### read in data
+
+# data set for January 2018 to May 2023
+surfrider <- read_csv(here("WorkingData", "surfrider", "SB SLO County Data - All.csv"))
+surfrider_may23 <- read_csv(here("WorkingData", "surfrider", "May-Oct2023_surfrider.csv")) 
+
+surfrider_data_frames <- list(surfrider, surfrider_may23) 
+surfrider_data <- reduce(surfrider_data_frames, full_join)
+
+```
+
+```{r}
+### clean names, replace NA with 0, remove duplicates, clean dates, sort by date, filter out rows with missing data
+surfrider_data <- surfrider_data %>% 
+  janitor::clean_names() %>% 
+  mutate_at(vars(cigarette_butts_number_837:other_items_number_1908), ~ifelse(is.na(.), 0, .)) %>% 
+  unique() %>% 
+  mutate(date = mdy(date)) %>% 
+  arrange(date) 
+  # filter(type != 0) %>% 
+  # filter(total_weight != 0)
+
+```
+
+
+### Part 2: TIDES data
+```{r}
+### read in data
+tides_sb_may2023 <- read_csv(here("WorkingData", "tides", "sb", "detailed-summary-santa-barbara-county-ca-usa.csv")) 
+tides_slo_may2023 <- read_csv(here("WorkingData", "tides", "slo", "detailed-summary-san-luis-obispo-county-ca-usa.csv")) 
+tides_sb_2023 <- read_csv(here("WorkingData", "tides", "sb", "2023-detailed-summary-santa-barbara.csv"))
+tides_sb_2022 <- read_csv(here("WorkingData", "tides", "sb", "2022-detailed-summary-santa-barbara.csv"))
+tides_sb_2021 <- read_csv(here("WorkingData", "tides", "sb", "2021-detailed-summary-santa-barbara.csv"))
+tides_sb_2020 <- read_csv(here("WorkingData", "tides", "sb", "2020-detailed-summary-santa-barbara.csv"))
+tides_sb_2019 <- read_csv(here("WorkingData", "tides", "sb", "2019-detailed-summary-santa-barbara.csv"))
+tides_sb_2018 <- read_csv(here("WorkingData", "tides", "sb", "2018-detailed-summary-santa-barbara.csv"))
+tides_sb_2017 <- read_csv(here("WorkingData", "tides", "sb", "2017-detailed-summary-santa-barbara.csv"))
+tides_sb_2016 <- read_csv(here("WorkingData", "tides", "sb", "2016-detailed-summary-santa-barbara.csv"))
+tides_slo_2023 <- read_csv(here("WorkingData", "tides", "slo", "2023-detailed-summary-san-luis-obispo.csv"))
+tides_slo_2022 <- read_csv(here("WorkingData", "tides", "slo", "2022-detailed-summary-san-luis-obispo.csv"))
+tides_slo_2021 <- read_csv(here("WorkingData", "tides", "slo", "2021-detailed-summary-san-luis-obispo.csv"))
+tides_slo_2020 <- read_csv(here("WorkingData", "tides", "slo", "2020-detailed-summary-san-luis-obispo.csv"))
+tides_slo_2019 <- read_csv(here("WorkingData", "tides", "slo", "2019-detailed-summary-san-luis-obispo.csv"))
+tides_slo_2018 <- read_csv(here("WorkingData", "tides", "slo", "2018-detailed-summary-san-luis-obispo.csv"))
+tides_slo_2017 <- read_csv(here("WorkingData", "tides", "slo", "2017-detailed-summary-san-luis-obispo.csv"))
+tides_slo_2016 <- read_csv(here("WorkingData", "tides", "slo", "2016-detailed-summary-san-luis-obispo.csv"))
+```
+
+
+```{r}
+#join the datasets for tides 
+
+tides_data_frames <- list(tides_sb_may2023, tides_slo_may2023, tides_sb_2023, tides_sb_2022, tides_sb_2021, tides_sb_2020,
+                    tides_sb_2019, tides_sb_2018, tides_sb_2017, tides_sb_2016,
+                    tides_slo_2023, tides_slo_2022, tides_slo_2021, tides_slo_2020,
+                    tides_slo_2019, tides_slo_2018, tides_slo_2017, tides_slo_2016)
+
+tides_data <- reduce(tides_data_frames, full_join)
+
+```
+
+```{r}
+#clean names, remove "Totals" rows, replace NAs, remove duplicates, clean dates, 
+tides_data <- tides_data %>%  
+  janitor::clean_names() %>% 
+  filter(!grepl('Totals:', cleanup_id)) %>% 
+  mutate(children = if_else(is.na(children), 0, children)) %>% 
+  mutate_at(vars("grocery_bags_plastic":"plastic_pieces"), ~replace_na(.,0)) %>% 
+  mutate(group_name = if_else(is.na(group_name), "none", group_name)) %>% 
+   unique() %>% 
+   mutate(cleanup_date = ymd(cleanup_date)) %>% 
+   arrange(cleanup_date) %>% 
+   filter(cleanup_type %in% c("land")) %>% 
+   filter(!environment %in% c("saltwater")) 
+
+```
+
+### Part 3: MDT Data
+```{r}
+### read in data
+mdt_2015_2022 <- read_csv(here("WorkingData", "mdt", "mdt-data-2015-2022.csv"))
+mdt_2023 <- read_csv(here("WorkingData", "mdt", "mdt-data.csv"))
+```
+
+```{r}
+#join the datasets for mdt 
+mdt_data <- full_join(mdt_2015_2022, mdt_2023) 
+```
+
+```{r}
+#clean names, remove "Totals" rows, replace NAs, remove duplicates, clean dates, 
+mdt_data <- mdt_data %>%
+  janitor::clean_names() %>%
+  mutate(project_name = if_else(is.na(project_name), "none", project_name)) %>%
+  mutate(username = if_else(is.na(username), "none", username)) %>%
+  mutate(event_name = if_else(is.na(event_name), "none", event_name)) %>%
+   unique() %>%
+   mutate(date = ymd_hms(dt)) %>%
+   arrange(date) %>% 
+  select(!dt) #%>%
+  # filter(location != "unknown, unknown") %>%
+  # filter(is.na(location)) #%>%
+  # filter(cleanup_type != "watercraft") %>%
+
+
+mdt_data <- mdt_data %>% 
+  mutate(lat = latitude) %>% 
+  mutate(long = longitude) %>% 
+  select(!latitude) %>% 
+  select(!longitude)
+```
+
+```{r}
+### pivot the data 
+### Create a dataset with the first date and geometry for each unique log_index
+first_info <- mdt_data %>%
+  group_by(log_index) %>%
+  summarise(
+    first_date = as.Date(first(date)),
+    first_lat = first(lat), 
+    first_long = first(long)
+  )
+
+### Pivot the data, summarizing quantities, and using the first date and geometry
+mdt_data_pivot <- mdt_data %>%
+  left_join(first_info, by = "log_index") %>%
+  pivot_wider(
+    names_from = c(master_material, master_item_name),
+    values_from = quantity,
+    id_cols = c(log_index, first_date, username, first_lat, first_long),
+    values_fn = list(quantity = sum)
+  ) %>% 
+  janitor::clean_names()  %>% 
+  mutate_at(vars(other_other:plastic_wipes), ~ifelse(is.na(.), 0, .)) %>% 
+  rename(lat = first_lat) %>% 
+  rename(long = first_long)
+
+### Note: some cleanups have multiple lat and long points, and times (all very close) to one another, so just selected one to keep for the whole cleanup
+```
+
+### Part 4: Spatial
+```{r}
+### get county outlines 
+california_sf <- read_sf(dsn = here("WorkingData", "Geospatial", "california_county_shape_file"), 
+                    layer = "california_county_shape_file") %>% 
+  janitor::clean_names() %>% 
+  filter(name %in% c("San Luis Obispo", "Santa Barbara")) %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269) #to put into crs of the boundary shapefiles
+```
+
+```{r}
+### get sanctuary boundaries 
+
+### initial boundary (considered area including norther segment of sanctuary)
+chnms_sf_initial <- read_sf(dsn = here("WorkingData", "Chumash_InitialBndyAlt_03082023"), 
+                    layer = "Chumash_InitBndyAlt_03082023", crs = st_crs(4269)) %>% 
+  janitor::clean_names() 
+
+### agency preferred boundary (agency-preferred alternative, including Gaviota coast extention)
+chnms_sf_preferred <- read_sf(dsn = here("WorkingData", "ChumashHeritage_AgencySelectAlt_12012022"), 
+                      layer = "Chumash_AgencySelectAlternative_12012022", crs = st_crs(4269)) %>% 
+  janitor::clean_names() 
+```
+
+```{r}
+### Format GPS coordinate data and set projection
+
+### split gps column into latitude and longitude columns - TIDES 
+tides_data <- tides_data %>%
+  # mutate(gps_coor = gps) %>% 
+   separate(gps, c("lat", "long"), sep = ",\\s*")
+
+### split gps column into latitude and longitude columns - Surfrider 
+surfrider_data <- surfrider_data %>%
+  # mutate(location_latlong = gps) %>% 
+   separate(location_latlong, c("lat", "long"), sep = ",\\s*")
+  
+### convert latitude and longitude columns to numeric 
+tides_data$lat <- as.numeric(tides_data$lat)
+tides_data$long <- as.numeric(tides_data$long)
+
+mdt_data_pivot$lat <- as.numeric(mdt_data_pivot$lat)
+mdt_data_pivot$long <- as.numeric(mdt_data_pivot$long)
+
+surfrider_data$lat <- as.numeric(surfrider_data$lat)
+surfrider_data$long <- as.numeric(surfrider_data$long)
+
+### set the coordinates to match the shapefile projection 
+tides_data_sf <- st_as_sf(tides_data, coords = c('long', 'lat')) %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+mdt_data_sf <- st_as_sf(mdt_data_pivot, coords = c('long', 'lat')) %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+surfrider_data_sf <- st_as_sf(surfrider_data, coords = c('long', 'lat')) %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+```
+
+```{r}
+### make  visualizations
+
+### try this: Plot it:
+# ggplot(my_sf) + 
+#   geom_sf(aes(color = cluster))
+
+# ggplot(tides_data_sf) + 
+#   geom_sf(aes(color = 'red'))
+
+### add points to the map 
+
+map_1_initial_boundary <- ggplot() + 
+  geom_sf(data = california_sf) +
+  geom_sf(data = chnms_sf_initial) +
+  geom_sf(data = tides_data_sf, color = "skyblue") + #, aes(size = total_items_collected)) +
+  geom_sf(data = mdt_data_sf, color = 'lightgreen') + 
+  geom_sf(data = surfrider_data_sf, color = 'gold') +
+  theme_bw()
+map_1_initial_boundary
+###NOTE: for MDT, each dot does not necessarily correspond to a single cleanup. See above. 
+
+map_2_preferred_boundary <- ggplot() + 
+  geom_sf(data = california_sf) +
+  geom_sf(data = chnms_sf_preferred) +
+  geom_sf(data = tides_data_sf, color = "skyblue") + #, aes(size = total_items_collected)) +
+  geom_sf(data = mdt_data_sf, color = 'lightgreen') + 
+  geom_sf(data = surfrider_data_sf, color = 'gold') +
+  theme_bw()
+map_2_preferred_boundary
+###NOTE: for MDT, each dot does not necessarily correspond to a single cleanup. See above. 
+
+```
+
+### Part 4a - filter points to sanctuary boundary - largest area (gaviota extension and northmost part both included)
+
+```{r}
+#combine the two shapefiles
+combined_chnms_sf <- st_union(chnms_sf_initial, chnms_sf_preferred)
+#this gave an error: warning: attribute variables are assumed to be spatially constant throughout all geometries. So, trying something else
+
+# map_combined_chnms <- ggplot() + 
+#   geom_sf(data = california_sf) +
+#   geom_sf(data = combined_chnms_sf)
+# map_combined_chnms
+
+# # Save the combined shapefile to a new file
+#st_write(combined_chnms_sf, "WorkingData/chnms_combined_boundary/combined_chnms_sf.shp")
+```
+
+
+
+```{r}
+### find coordinates to filter data to - did in QGIS but can do in code here 
+
+#gaviota coast eastern point  
+#-119.933340, 34.434273
+
+#northern point 
+# -121.10493, 35.55480
+
+north_bound_combined <- 35.55480 
+south_bound_combined <- -119.933340 
+
+#filter datasets
+surfrider_data_combined <- surfrider_data %>% 
+  filter(lat < north_bound_combined) %>% 
+  filter(abs(long) >abs(south_bound_combined))
+
+tides_data_combined <- tides_data %>% 
+  filter(lat < north_bound_combined) %>% 
+  filter(abs(long) >abs(south_bound_combined))
+
+mdt_data_combined <- mdt_data_pivot %>% 
+  filter(lat < north_bound_combined) %>% 
+  filter(abs(long) >abs(south_bound_combined))
+```
+
+```{r}
+### make new shapefiles 
+tides_data_sf_combined <- st_as_sf(tides_data_combined, coords = c('long', 'lat')) %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+mdt_data_sf_combined <- st_as_sf(mdt_data_combined, coords = c('long', 'lat')) %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+surfrider_data_sf_combined <- st_as_sf(surfrider_data_combined, coords = c('long', 'lat')) %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+```
+
+```{r}
+### new map with sanctuary combined boundary 
+map_combined <- ggplot() + 
+  geom_sf(data = california_sf) +
+  geom_sf(data = combined_chnms_sf) +
+  geom_sf(data = tides_data_sf_combined, color = "skyblue") + #, aes(size = total_items_collected)) +
+  geom_sf(data = mdt_data_sf_combined, color = 'lightgreen') +
+  geom_sf(data = surfrider_data_sf_combined, color = 'gold') +
+  theme_bw()
+map_combined
+```
+
+### 4b - Initial Sanctuary Boundary
+This code was used for an initial pass at spatially filtering the cleanup data, using the Initial Boundary Alternative. It is preserved here for reference, but the final product was filtered using the spatial information and files for the Combined boundary, which includes both Initial and Agency-Preferred Alternative, to cover the entire study area.
+```{r}
+
+### find min/max x and y coordinates of sanctuary boundary
+
+# # st_bbox(chnms_sf)
+# chnms_info <- st_read(dsn = here("WorkingData", "Chumash_InitialBndyAlt_03082023"), 
+#          layer = "Chumash_InitBndyAlt_03082023")
+# # chnms_info
+# 
+# # north_bound <- chnms_info$ymax # north sanctuary boundary
+# # south_bound <- chnms_info$xmax # south/east sanctuary boundary
+# 
+# south_bound <- -120.2267 #ymax is north sanctuary boundary
+# north_bound <- 35.55483  #xmax is south/east sanctuary boundary
+# 
+# ### filter data points
+# 
+# ### filter by location - TIDES
+# 
+# tides_data_lim <- tides_data %>% 
+#   filter(lat < north_bound) %>% 
+#   filter(abs(long) > abs(south_bound))
+# 
+# tides_data_lim_sf <- st_as_sf(tides_data_lim, coords = c('long', 'lat')) %>% 
+#   st_set_crs(4326) %>% 
+#   st_transform(crs = 32610)
+# 
+# ### filter by location - MDT
+# 
+# mdt_data_lim <- mdt_data %>% 
+#   filter(lat < north_bound) %>% 
+#   filter(abs(long) > abs(south_bound))
+# 
+# mdt_data_lim_sf <- st_as_sf(mdt_data_lim, coords = c('long', 'lat')) %>% 
+#   st_set_crs(4326) %>% 
+#   st_transform(crs = 32610)
+# 
+# ### filter by location - Surfrider
+# 
+# surfrider_data_lim <- surfrider_data %>% 
+#   filter(lat < north_bound) %>% 
+#   filter(abs(long) > abs(south_bound))
+# 
+# surfrider_data_lim_sf <- st_as_sf(surfrider_data_lim, coords = c('long', 'lat')) %>% 
+#   st_set_crs(4326) %>% 
+#   st_transform(crs = 32610)
+# 
+# ### map new set of points limited to those within sanctuary boundaries
+# 
+# map2 <- ggplot() + 
+#   geom_sf(data = california_sf) +
+#   geom_sf(data = chnms_sf) +
+#   geom_sf(data = tides_data_lim_sf, color = "skyblue") + #, aes(size = total_items_collected)) +
+#   geom_sf(data = mdt_data_lim_sf, color = 'lightgreen') + 
+#   geom_sf(data = surfrider_data_lim_sf, color = 'gold') +
+#   theme_bw()
+# map2
+# 
+#   
+
+```
+
+### 4c - Agency Preferred Boundary 
+See GIS steps description.
+```{r}
+
+```
+
+### 4d - Use combined study area boundary w/ buffer to filter data to coastline.
+We used QGIS to combine the initial boundary with the agency-preferred alternative boundary; isolate the coastal boundary of the sanctuary; and create a buffer of approx. 500 meters along the length of that coastal boundary. Here, we read in that shape and use it to filter the Surfrider, TIDES, and MDT data.
+
+```{r}
+### get coastal buffer boundary & change projection
+chnms_sf_coastbuffer <- read_sf(dsn = here("WorkingData", "Geospatial", "final_buffer"),
+                    layer = "1milebuffer_final") %>%
+  janitor::clean_names()
+
+### map with sanctuary combined boundary AND buffer
+map_buffer <- ggplot() + 
+  geom_sf(data = california_sf) +
+  geom_sf(data = combined_chnms_sf) +
+  geom_sf(data = chnms_sf_coastbuffer) +
+  geom_sf(data = tides_data_sf_combined, color = "skyblue") + #, aes(size = total_items_collected)) +
+  geom_sf(data = mdt_data_sf_combined, color = 'lightgreen') +
+  geom_sf(data = surfrider_data_sf_combined, color = 'gold') +
+  theme_bw()
+map_buffer 
+
+```
+
+### 4d continued
+```{r}
+
+### Check the CRS of tides_data_sf_combined
+print(st_crs(tides_data_sf_combined))
+
+### Check the CRS of chnms_sf_coastbuffer
+print(st_crs(chnms_sf_coastbuffer))
+
+# If the CRS are different, you may need to transform one of the objects
+# For example, if tides_data_sf_combined has CRS 4326 and chnms_sf_coastbuffer has CRS 4269
+# You can transform tides_data_sf_combined to CRS 4269 like this
+chnms_sf_coastbuffer <- st_transform(chnms_sf_coastbuffer, crs = 4269)
+# Now both objects should have the same CRS, and you can use them in st_filter
+
+### filter Surfrider/tides/mdt data to coastal buffer area to exclude inland points
+tides_data_sf_combined_filtered <- st_filter(tides_data_sf_combined, chnms_sf_coastbuffer)
+mdt_data_sf_combined_filtered <- st_filter(mdt_data_sf_combined, chnms_sf_coastbuffer)
+surfrider_data_sf_combined_filtered <- st_filter(surfrider_data_sf_combined, chnms_sf_coastbuffer)
+```
+# Create dataframes with spatially-buffered data
+```{r}
+### add lat and long columns for conversion to dataframes 
+
+tides_data_sf_combined_filtered$lat <- st_coordinates(tides_data_sf_combined_filtered)[, 2] # Second column is latitude
+tides_data_sf_combined_filtered$long <- st_coordinates(tides_data_sf_combined_filtered)[, 1]
+
+mdt_data_sf_combined_filtered$lat <- st_coordinates(mdt_data_sf_combined_filtered)[, 2] # Second column is latitude
+mdt_data_sf_combined_filtered$long <- st_coordinates(mdt_data_sf_combined_filtered)[, 1]
+
+surfrider_data_sf_combined_filtered$lat <- st_coordinates(surfrider_data_sf_combined_filtered)[, 2] # Second column is latitude
+surfrider_data_sf_combined_filtered$long <- st_coordinates(surfrider_data_sf_combined_filtered)[, 1]
+
+### map data filtered to coastal zone
+map_filtered <- ggplot() + 
+  geom_sf(data = california_sf) +
+  geom_sf(data = combined_chnms_sf) +
+  geom_sf(data = chnms_sf_coastbuffer) +
+  geom_sf(data = tides_data_sf_combined_filtered, color = "skyblue") + #, aes(size = total_items_collected)) +
+  geom_sf(data = mdt_data_sf_combined_filtered, color = 'lightgreen') +
+  geom_sf(data = surfrider_data_sf_combined_filtered, color = 'gold') +
+  theme_bw()
+map_filtered
+
+### create dataframes including only spatially filtered data
+tides_data_combined_filtered <- as.data.frame(tides_data_sf_combined_filtered)
+mdt_data_combined_filtered <- as.data.frame(mdt_data_sf_combined_filtered)
+surfrider_data_combined_filtered <- as.data.frame(surfrider_data_sf_combined_filtered)
+
+
+```
+
+
+### Part 5: Removing Duplicates 
+
+#TIDES 
+```{r}
+### remove duplicates from tides_data_combined_filtered dataset 
+
+tides_id_delete <- c(166724, 72941, 72943, 72944, 16463, 22999, 22991, 23154, 23379, 31808, 31758, 33886, 34746, 36317, 56657, 74223, 72940, 72939, 95855, 117076, 129125, 129126, 135104, 134209, 243260, 72944, 73596, 73598, 166724, 135416)
+  
+tides_cleaned <- tides_data_combined_filtered %>% 
+  filter(!cleanup_id %in% tides_id_delete) %>% 
+  filter(!is.na(total_items_collected)) %>% # this deletes all rows that have an NA in the total items collected column, which is only NA if all the individual items are 0, which means we don't need that data
+  select(cleanup_id:number_of_bags, total_items_collected, lat, long, grocery_bags_plastic:plastic_pieces)
+
+```
+
+#MDT 
+```{r}
+### remove duplicates from the mdt_data_combined_filtered dataset
+
+mdt_id_delete <- c()
+  
+mdt_cleaned <- mdt_data_combined_filtered %>% 
+  filter(!log_index %in% mdt_id_delete) %>% 
+  select(log_index, first_date, username, lat, long, other_other:plastic_wipes)
+```
+
+
+```{r}
+### combine these cleanups that look different but are by the same person/group on the same day in similar locations 
+
+### Specify the log_index values you want to combine
+combine_1 <- c(10217, 10218, 10221, 10222, 10223)
+combine_2 <- c(13784, 13785, 13791)
+combine_3 <- c(22211, 22212)
+combine_4 <- c(22246, 22247)
+combine_5 <- c(48263, 48261, 48266, 48265, 48264, 48262, 48277, 48268, 48267, 48269, 48759, 48760, 48758)
+combine_6 <- c(51179, 51180)
+combine_7 <- c(51222, 51221, 51223, 51220, 51219)
+combine_8 <- c(51580, 51579, 51578, 51581, 51577) 
+combine_8_5 <- c(55602, 55605, 55604, 55610, 55606, 55608, 55607)
+combine_10 <- c(56024, 56025)
+combine_11 <- c(10386, 10387)
+
+### Create a new log_index for the rows to combine
+c1 <- 10217
+c2 <- 13784
+c3 <- 22211
+c4 <- 22246
+c5 <- 48263
+c6 <- 51179
+c7 <- 51222
+c8 <- 51580
+c85 <- 55602
+c10 <- 56024
+c11 <- 10386
+
+mdt_cleaned$log_index[mdt_cleaned$log_index %in% combine_1] <- c1
+mdt_cleaned$log_index[mdt_cleaned$log_index %in% combine_2] <- c2
+mdt_cleaned$log_index[mdt_cleaned$log_index %in% combine_3] <- c3
+mdt_cleaned$log_index[mdt_cleaned$log_index %in% combine_4] <- c4
+mdt_cleaned$log_index[mdt_cleaned$log_index %in% combine_5] <- c5
+mdt_cleaned$log_index[mdt_cleaned$log_index %in% combine_6] <- c6
+mdt_cleaned$log_index[mdt_cleaned$log_index %in% combine_7] <- c7
+mdt_cleaned$log_index[mdt_cleaned$log_index %in% combine_8] <- c8
+mdt_cleaned$log_index[mdt_cleaned$log_index %in% combine_8_5] <- c85
+mdt_cleaned$log_index[mdt_cleaned$log_index %in% combine_10] <- c10
+mdt_cleaned$log_index[mdt_cleaned$log_index %in% combine_11] <- c11
+
+debris_col <- setdiff(names(mdt_cleaned), c("log_index", "first_date", "username", "lat", "long"))
+
+mdt_clean <- mdt_cleaned %>%
+  group_by(log_index) %>%
+  summarize(
+    first_date = first(first_date), 
+    username = first(username), 
+    lat = first(lat), 
+    long = first(long), 
+    across(all_of(debris_col), ~sum(.))
+  )
+
+```
+
+
+#Surfrider 
+```{r}
+### remove duplicates from the surfrider_data_combined_filtered dataset
+
+surfrider_id_delete <- c(3884, 5163, 5162, 2667, 2116, 8296)
+  
+surfrider_cleaned <- surfrider_data_combined_filtered %>% 
+  filter(!id %in% surfrider_id_delete) %>% 
+  select(!geometry)
+```
+
+
+
+
+### Part 6: Our Primary Data (using MDMAP protocol)
+
+```{r}
+
+### read in data
+primary <- read_csv(here("WorkingData","fieldwork_data.csv"))
+
+### filter and select the needed data columns 
+primary_data <- primary %>% 
+  janitor::clean_names() %>% 
+ select(!k12_group:city_county) %>% 
+  select(!drain_input:number_of_recreators) %>% 
+  select(!direction_when_facing_water:site_notes) %>% 
+  select(!site_back_barrier_left_lat:site_back_barrier_right_lon) %>% 
+  select(!site_waters_edge_right_lat:site_waters_edge_right_lon) %>% 
+  select(!debris_removal_transect:transect_notes) %>% 
+  mutate_at(vars(plastic_fragments_film:other_other_terracota), ~ifelse(is.na(.), 0, .)) %>% 
+  mutate(date = ymd(survey_date)) %>% 
+  arrange(date) %>% 
+  select(!survey_date) 
+
+primary_updated <- primary_data %>% 
+  mutate(lat= site_waters_edge_left_lat) %>% 
+  mutate(long = site_waters_edge_left_lon) %>% 
+  select(!site_waters_edge_left_lat) %>% 
+  select(!site_waters_edge_left_lon) %>% 
+  mutate(total_items = rowSums(select(., "plastic_fragments_film":"other_other_terracota"))) %>% 
+  select(!total_debris_items)
+
+### convert latitude and longitude columns to numeric 
+primary_updated$lat <- as.numeric(primary_updated$lat)
+primary_updated$long <- as.numeric(primary_updated$long)
+
+### filter to the sanctuary boundary
+primary_updated <- primary_updated %>%
+  filter(lat < north_bound_combined) %>%
+  filter(abs(long) > abs(south_bound_combined))
+
+### combine all transects into one row per cleanup 
+
+### give unique names
+row_to_modify <- c(47, 48, 49, 50)
+column_to_modify <- "shoreline_site_name"
+new_value <- "Dangermond North Beach 2"
+primary_updated[row_to_modify, column_to_modify] <- new_value
+
+row_to_modify_2 <- 31
+column_to_modify_2 <- "shoreline_site_name"
+new_value_2 <- "Little Coho - South" 
+primary_updated[row_to_modify_2, column_to_modify_2] <- new_value_2
+
+### summarize transects 
+debris_columns <- setdiff(names(primary_updated), c("shoreline_site_name", "transect_id", "beach_width_at_transect", "transect_width", "site_length", "slope", "substrate", "back_barrier_type", "num_people_searching_for_debris", "debris_search_start_time", "debris_search_end_time", "team_count", "date", "lat", "long"))
+
+primary_summed <- primary_updated %>%
+  group_by(shoreline_site_name) %>%
+  summarize(
+    transect_id = first(transect_id),
+    beach_width_at_transect = first(beach_width_at_transect), 
+    transect_width = first(transect_width), 
+    site_length = first(site_length), 
+    slope = first(slope), 
+    substrate = first(substrate), 
+    back_barrier_type = first(back_barrier_type), 
+    num_people_searching_for_debris = first(num_people_searching_for_debris), 
+    debris_search_start_time = first(debris_search_start_time), 
+    debris_search_end_time = first(debris_search_end_time), 
+    team_count = first(team_count),
+    date = first(date), 
+    lat = first(lat), 
+    long = first(long),
+    across(all_of(debris_columns), ~sum(.))
+  )
+
+### remove irrelevant columns - the ones that had transect-specific information 
+primary_clean <- primary_summed %>% 
+  select(!c(transect_id, beach_width_at_transect, transect_width, substrate, back_barrier_type, team_count, debris_search_start_time, debris_search_end_time)) 
+```
+
+# spatial work for our primary data 
+```{r}
+# shapefile of primary data
+primary_updated_sf <- st_as_sf(primary_clean, coords = c('long', 'lat')) %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+#add lat and long columns for conversion back to dataframes after filtering 
+primary_updated_sf$lat <- st_coordinates(primary_updated_sf)[, 2] # Second column is latitude
+primary_updated_sf$long <- st_coordinates(primary_updated_sf)[, 1]
+
+```
+
+
+###Part 7: Preliminary Analysis 
+
+#Part 7a. total people, cleanups, etc 
+
+```{r}
+#Surfrider total trash
+surfrider_cleaned <- surfrider_cleaned %>% 
+  mutate(total_items = rowSums(select(surfrider_cleaned, "cigarette_butts_number_837":"other_items_number_1908")))
+surfrider_sum_all_debris <- sum(surfrider_cleaned$total_items)
+#delete cleanups that don't have any item data  
+surfrider_clean <- surfrider_cleaned %>% 
+  filter(total_items !=0)
+
+#MDT total trash  
+mdt_clean <- mdt_clean %>% 
+  mutate(total_items = rowSums(select(mdt_clean, "other_other":"plastic_wipes")))
+mdt_sum_all_debris <- sum(mdt_clean$total_items)
+
+#Tides total trash  
+tides_cleaned <- tides_cleaned %>% 
+  mutate(total_items = rowSums(select(tides_cleaned, "grocery_bags_plastic":"plastic_pieces")))
+tides_sum_all_debris <- sum(tides_cleaned$total_items)
+#delete cleanups that don't have any item data 
+tides_clean <- tides_cleaned %>% 
+  filter(total_items !=0)
+
+```
+
+# SAVE TO CSV FOR HARMONIZATION 
+
+```{r}
+write.csv(surfrider_clean, file = "WorkingData/CleanedDataFinal/surfrider_clean.csv")
+write.csv(mdt_clean, file = "WorkingData/CleanedDataFinal/mdt_clean.csv")
+write.csv(tides_clean, file = "WorkingData/CleanedDataFinal/tides_clean.csv")
+write.csv(primary_clean, file = "WorkingData/CleanedDataFinal/mdmap_clean.csv")
+```

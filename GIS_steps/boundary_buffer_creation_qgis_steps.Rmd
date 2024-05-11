@@ -1,0 +1,100 @@
+---
+title: "boundary_buffer_creation_steps"
+output: html_document
+date: "2024-05-10"
+---
+
+This document provides step-by-step information about how to create a shapefile of the greatest possible sanctuary boundary extending from Cambria, California, to Naples, California. It also details how we created a buffer to filter cleanups to include only the coastline and exclude ocean and inland cleanups. These steps were done in QGIS. 
+
+**Acronyms:**
+
+- CHNMS = (proposed) Chumash Heritage National Marine Sanctuary
+- CA = California
+- SB = Santa Barbara (county)
+- SLO = San Luis Obispo (county)
+
+
+**1.	Import Layers**	
+
+- CA state boundary	
+- CA county boundaries	
+- CHNMS boundary – initial	
+- CHNMS boundary – agency-preferred alternative
+
+**2.	Set projection to all same**
+
+- NAD 1983 / UTM Zone 10N	(EPSG:26910)
+
+**3.	Combine CHNMS boundary polygons to create one with entire coastline area considered	**
+
+- Use Vector Overlay to Union tool 	
+- Input layers: CHNMS boundary – initial & agency-preferred alternative	
+- EPSG:4269	
+- Output as shapefile: Chumash_StudyAreaFull	
+- [Note: could also use Vector Geometry to Dissolve to create one polygon for the entire study area, but this was not done yet at this step] 
+
+**4.	Extract boundary of CHNMS & state as line	**
+
+- [Note: vector overlay, extract/clip by extent did not produce the desired result, so the following tools were used instead]	
+- Tool: Vector Geometry to Boundary	
+- Apply to Chumash_StudyAreaFull	
+- Repeat for CA state boundary (use california_county_shape_file to get outline, because this one is un-buffered)
+
+**5.	Clip to coastline**
+
+- Tool: Vector Overlay to Extract/clip by extent; check the box for “clip” (input ca_county shapefile, clip to CHNMS area, to get just coast outline in that part)	
+- Use “edit” in attribute table to delete Channel Islands from county boundary to keep only the mainland coast	
+- Vector geometry to multipart to single parts tool (to separate the small inland Kern/SLO county piece, and small inland extension of SB boundary); then “edit” in attribute table to delete these small inland sections of the county outlines	
+- Vector general to extract selected features	
+- Select one attribute in attribute table
+- Use extract selected features to create a new layer w/ that county’s piece of boundary 
+- Repeat for second county	
+- Vector overlay to difference	
+
+- For SB:
+1.	Input layer: CHNMS_coast_SB
+2.	Overlay layer: CHNMS_coast_SLO
+3.	Output: CHNMS_coast_sep-SB
+
+- For SLO:
+1.	Input layer: CHNMS_coast_SLO
+2.	Overlay layer: CHNMS_coast_SB
+3.	Output: CHNMS_coast_sep-SLO
+
+- To finish for SLO:
+1.	Vector geometry t0 multipart to single parts tool
+2.	“edit” in attribute table to delete extra small piece
+3.	Output: CHNMS_coast_sep-SLO_2
+4.	Vector general t0 merge vector layers
+5.	Input layers: CHNMS_coast_sep-SB and CHNMS_coast_sep-SLO_2
+8.	Output: CHNMS_coast_clip
+9. This creates one layer (shapefile) with one line for the entire stretch of coast for the study area, with no inland branches too!
+
+**6.	Create buffer**
+
+- Vector geometry to Buffer
+- (make sure you’re in a projection with meters as the default units. I used EPSG:26910.)
+- Input layer: CHNMS_coast_clip
+- Distance: 1.0 miles
+- Segments: 5
+- End cap style: flat
+- Join style: miter
+- Miter limit: 1
+- Dissolve result to merge county buffers
+- Selected all cleanup data points within 1 mile buffer and saved selected data as new shapefile named “alldata_clipped_1mile"
+
+**DATA SOURCES:**
+
+CHNMS boundaries (initial and agency-preferred) were provided by NOAA.
+
+California state boundary
+Downloaded from: https://data.ca.gov/dataset/ca-geographic-boundaries/resource/3db1e426-fb51-44f5-82d5-a54d7c6e188b on August 22, 2023
+California State boundary in shapefile format from the US Census Bureau's 2016 MAF/TIGER database.
+Last updated September 10, 2019.  Created August 10, 2019. 
+Format: SHP
+Downloaded from California Open Data Portal. 
+
+
+California county boundaries
+Downloaded February 2023.
+California County shapefile from the US Census Bureau's 2016 MAF/TIGER database, accessed here:https://data.ca.gov/dataset/ca-geographic-boundaries/resource/b0007416-a325-4777-9295-368ea6b710e6?inner_span=True)

@@ -1,0 +1,401 @@
+---
+title: "SummaryStats"
+date: "2024-01-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(here) 
+library(tidyverse)
+library(sf)
+library(tmap)
+library(dplyr)
+library(purrr) 
+library(lubridate)
+library(broom)
+library(knitr)
+library(ggrepel)
+library(scales)
+
+### color palette generator: https://r-charts.com/color-palette-generator/
+```
+
+# Load in cleaned and combined data .csv file
+
+```{r}
+all_data <- read_csv(here("Outputs", "all_data_combined.csv"))
+```
+
+# Summary statistics by Cleanup
+
+```{r}
+### total number of cleanups
+num_datasets <- 4
+num_cleanups <- nrow(all_data)
+#num_activity <- ### too many to be useful/relevant
+num_material <- 6
+num_years <- 9 ### 2015 to 2023
+num_volunteers <- sum(all_data$people, na.rm = TRUE)
+num_items <- sum(all_data$total_items, na.rm = TRUE)
+```
+
+# Summary statistics by Material Type
+
+```{r}
+### subset relevant columns
+data_material_type <- all_data %>% 
+  select(c(id:total_items, plastic:paper_wood))
+
+### item counts by material type
+items_total <- sum(all_data$total_items, na.rm = TRUE)
+items_plastic <- sum(all_data$plastic, na.rm = TRUE)
+items_glass <- sum(all_data$glass, na.rm = TRUE)
+items_metal <- sum(all_data$metal, na.rm = TRUE)
+items_cloth <- sum(all_data$cloth, na.rm = TRUE)
+items_mixed <- sum(all_data$mixed, na.rm = TRUE)
+items_paper_wood <- sum(all_data$paper_wood, na.rm = TRUE)
+
+### percentage of items by material type
+perc_plastic <- items_plastic/items_total
+perc_glass <- items_glass/items_total
+perc_metal <- items_metal/items_total
+perc_cloth <- items_cloth/items_total
+perc_mixed <- items_mixed/items_total
+perc_paper_wood <- items_paper_wood/items_total
+
+### create summary dataframe for data by material type
+summary_material <- data.frame("material_type" = c('plastic','glass','metal','cloth','mixed','paper_wood'), 
+                           "count" = c(items_plastic, items_glass, items_metal, items_cloth, items_mixed, items_paper_wood), 
+                           "percentage" = c(perc_plastic, perc_glass, perc_metal, perc_cloth, perc_mixed, perc_paper_wood),
+                           "perc" = scales::label_percent(accuracy = .1, scale = 100, prefix = "", suffix = "", big.mark = " ", decimal.mark = ".", trim = TRUE)(c(perc_plastic, perc_glass, perc_metal, perc_cloth, perc_mixed, perc_paper_wood)),
+                          "perc_label" = scales::label_percent(accuracy = .1, scale = 100, prefix = "", suffix = "%", big.mark = " ", decimal.mark = ".", trim = TRUE)(c(perc_plastic, perc_glass, perc_metal, perc_cloth, perc_mixed, perc_paper_wood))
+)
+
+
+
+```
+
+# Summary statistics by Activity Type
+
+```{r}
+
+### subset relevant columns
+data_activity_type <- all_data %>% 
+  select(c(id:total_items, dumping:various))
+
+### item counts by material type
+items_total <- sum(all_data$total_items, na.rm = TRUE)
+items_dumping <- sum(all_data$dumping, na.rm = TRUE)
+items_eating.drinking <- sum(all_data$eating.drinking, na.rm = TRUE)
+items_fishing <- sum(all_data$fishing, na.rm = TRUE)
+items_personal.hygiene <- sum(all_data$personal.hygiene, na.rm = TRUE)
+items_recreation <- sum(all_data$recreation, na.rm = TRUE)
+items_smoking <- sum(all_data$smoking, na.rm = TRUE)
+items_various <- sum(all_data$various, na.rm = TRUE)
+
+### percentage of items by material type
+perc_dumping <- items_dumping/items_total
+perc_eating.drinking <- items_eating.drinking/items_total
+perc_fishing <- items_fishing/items_total
+perc_personal.hygiene <- items_personal.hygiene/items_total
+perc_recreation <- items_recreation/items_total
+perc_smoking <- items_smoking/items_total
+perc_various <- items_various/items_total
+
+### create summary dataframe for data by material type
+summary_activity <- data.frame("activity_type" = c('dumping', 'eating.drinking', 'fishing', 'personal.hygiene', 'recreation', 'smoking', 'various'), 
+                           "count" = c(items_dumping, items_eating.drinking, items_fishing, items_personal.hygiene, items_recreation, items_smoking, items_various), 
+                           "percentage" = c(perc_dumping, perc_eating.drinking, perc_fishing, perc_personal.hygiene, perc_recreation, perc_smoking, perc_various),
+                           "perc" = scales::label_percent(accuracy = .1, scale = 100, prefix = "", suffix = "", big.mark = " ", decimal.mark = ".", trim = TRUE)(c(perc_dumping, perc_eating.drinking, perc_fishing, perc_personal.hygiene, perc_recreation, perc_smoking, perc_various)),
+                          "perc_label" = scales::label_percent(accuracy = .1, scale = 100, prefix = "", suffix = "%", big.mark = " ", decimal.mark = ".", trim = TRUE)(c(perc_dumping, perc_eating.drinking, perc_fishing, perc_personal.hygiene, perc_recreation, perc_smoking, perc_various))
+)
+
+```
+
+# Create Figures
+
+## By Material Type
+
+```{r}
+### table - create and organize
+summary_material$perc <- as.numeric(summary_material$perc)
+summary_material <- summary_material[order(summary_material$perc, decreasing = TRUE), ]
+ 
+### pie chart - percentage by material type
+fig_matl_pie <- ggplot(data=summary_material, aes(x="", y=count, fill=factor(material_type, levels=summary_material$material_type))) +
+  geom_bar(stat="identity", width=1) +  # Adjust width as needed
+  theme_bw() +
+  coord_polar("y", start=0, direction = -1) + 
+  # geom_label(aes(label = paste0(perc, "%"), x = 1.5, y = count),
+  #            position = position_stack(vjust = .9),
+  #            color = "black",
+  #            size = 4,
+  #            show.legend = FALSE) +
+  labs(x = NULL, y = NULL, fill = NULL, title = "Debris by Material Type") +
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(), 
+        panel.border = element_blank(), 
+        plot.title = element_text(hjust = 1, size = 15), 
+        legend.text = element_text(size = 10)) +
+  scale_fill_manual(values = rev(c("#016450", "#02818a", "#3690c0", "#67a9cf", "#a6bddb", "#d0d1e6")),
+                    labels = c("Plastic", "Glass", "Metal", "Mixed", "Paper & Wood", "Cloth")) +
+    guides(fill = guide_legend(title = "Material Type", title.theme = element_text(size = 12)))  
+
+
+
+fig_matl_pie
+
+```
+
+## By Activity Type
+
+```{r}
+
+### reorder the table 
+summary_activity$perc <- as.numeric(summary_activity$perc)
+summary_activity <- summary_activity[order(summary_activity$perc, decreasing = TRUE), ]
+
+### pie chart - percentage by activity type
+fig_activity_pie <- ggplot(data=summary_activity, aes(x="", y=count, fill=factor(activity_type, levels=summary_activity$activity_type))) +
+  geom_bar(stat="identity", width=1) +  # Adjust width as needed
+  theme_bw() +
+  coord_polar("y", start=0, direction = -1) + 
+  labs(x = NULL, y = NULL, fill = NULL, title = "Debris by Source Activity") +
+  theme(axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(), 
+        panel.border = element_blank(), 
+        plot.title = element_text(hjust = 1, size = 15), 
+        legend.text = element_text(size = 10)) +
+  scale_fill_manual(values = c("#016450", "#02818a", "#3690c0", "#67a9cf", "#a6bddb", "#d0d1e6", "#ece2f0"),
+                    labels = c("Eating & Drinking", "Smoking", "Various", "Dumping", "Fishing", "Personal Hygeine", "Recreation")) +
+    guides(fill = guide_legend(title = "Source Activity", title.theme = element_text(size = 12)))  
+
+fig_activity_pie
+```
+
+## By Item Type
+
+```{r}
+### table
+data_item_type <- all_data %>% 
+  select(c(id:total_items, construction:plastic_fragments))
+
+### table of summed items
+item_sums <- data_item_type %>% 
+  select(c(construction:plastic_fragments)) %>% 
+  colSums(., na.rm = TRUE)
+
+### list of item types
+item_list <- data_item_type %>% 
+  select(c(construction:plastic_fragments)) %>% 
+  colnames()
+
+### summary table
+summary_item <- data.frame("item_type" = item_list, 
+                            "count" = item_sums)
+rownames(summary_item) <- NULL
+
+
+### order for the graph
+summary_item_ordered <- summary_item[order(summary_item$count), ]
+
+### Show first rows
+items_top_5 <- tail(summary_item_ordered, 5)
+items_1000plus <- tail(summary_item_ordered, 22)
+
+
+### column graph - top 5 items
+### Order the bars in descending order by count
+items_top_5$count <- as.numeric(items_top_5$count)
+items_top_5$item_type <- factor(items_top_5$item_type, levels = items_top_5$item_type[order(items_top_5$count, decreasing = TRUE)])
+
+### calculate percentages 
+items_top_5 <- items_top_5 %>% 
+  mutate(percentage = count/items_total)
+
+
+### Plot with reordered bars and titles at the bottom of each bar
+fig_item5_bar <- ggplot(data = items_top_5, aes(fill=item_type, y=count, x=item_type)) +
+  geom_bar(position='dodge', stat='identity') +
+  geom_text(aes(label = comma(count)), vjust = -0.5, position = position_dodge(width = 0.9), size = 3) +
+  ggtitle('Top Five Debris Item Category Totals') +
+  xlab('Item Category') +
+  ylab('Number of Items') +
+  theme_minimal() +
+  theme(axis.line = element_blank(),
+        axis.text.x = element_text(angle = 0, hjust = .5),
+        axis.ticks = element_blank(), 
+        axis.title.x = element_text(margin = margin(t = 15), size = 12), 
+        axis.title.y = element_text(margin = margin(r = 15), size = 12), 
+        plot.title = element_text(size = 15, hjust = 0.5)) +
+  scale_fill_manual('item_type', values=rev(c("#d0d1e6", "#a6bddb", "#67a9cf", "#1c9099", "#016c59"))) + 
+  scale_x_discrete(labels = function(x) str_to_title(str_replace_all(x, "_", " "))) + 
+  guides(fill = FALSE)
+fig_item5_bar
+
+
+```
+
+### More figures
+
+## top 5 items by year
+
+```{r}
+### use all_data df and only keep columns plastic_fragments, wrappers, bottle_caps, bottles, glass_fragments, total_items and summarize them each by year
+summarized_top5items <- all_data %>%
+  mutate(year = lubridate::year(date)) %>%
+  group_by(year) %>%
+  summarise(
+    plastic_fragments = sum(plastic_fragments),
+    wrappers = sum(wrappers),
+    bottle_caps = sum(bottle_caps),
+    bottles = sum(bottles),
+    glass_fragments = sum(glass_fragments),
+    total_items = sum(total_items), 
+    total_cleanups = n()
+  ) %>% 
+    filter(!is.na(year))  # Remove the last row which contains NA
+
+### graph it 
+top5_long <- tidyr::pivot_longer(summarized_top5items, 
+                                            cols = c(plastic_fragments, wrappers, bottle_caps, bottles, glass_fragments, total_items),
+                                            names_to = "Category", values_to = "Value")
+
+### define colors 
+custom_colors <- c("plastic_fragments" = "#016c59",
+                   "wrappers" = "#1c9099",
+                   "bottle_caps" = "#67a9cf",
+                   "bottles" = "#a6bddb",
+                   "glass_fragments" = "#d0d1e6",
+                   "total_items" = "black")
+
+### define legend 
+legend_order <- c("total_items", "plastic_fragments", "wrappers", "bottle_caps", "bottles", "glass_fragments")
+
+top5_long$Category <- factor(top5_long$Category, levels = legend_order)
+
+ggplot(data = top5_long, aes(x = year, y = Value, color = Category)) +
+  geom_line() +
+  geom_point() +
+  scale_color_manual(values = custom_colors, 
+                     labels = c("Total Items", "Plastic Fragments", "Wrappers", "Bottle Caps", "Bottles", "Glass Fragments"), name = "Item Category") +
+  scale_y_continuous(labels = comma) + 
+  labs(title = "Top Five Debris Item Categories Over Time",
+       x = "Year",
+       y = "Total Annual Count",
+       color = "Category") +
+  theme_minimal() + 
+  theme(axis.line = element_blank(),
+        axis.text.x = element_text(angle = 0, hjust = .5),
+        axis.ticks = element_blank(), 
+        axis.title.x = element_text(margin = margin(t = 15), size = 12), 
+        axis.title.y = element_text(margin = margin(r = 15), size = 12), 
+        plot.title = element_text(size = 15, hjust = 0.5))
+
+```
+
+## top five items with effort metric included
+
+```{r}
+### using summarized_top5items
+top5items_average <- summarized_top5items %>% 
+  mutate(
+    plastic_fragments_ratio = plastic_fragments / total_cleanups,
+    wrappers_ratio = wrappers / total_cleanups,
+    bottle_caps_ratio = bottle_caps / total_cleanups,
+    bottles_ratio = bottles / total_cleanups,
+    glass_fragments_ratio = glass_fragments / total_cleanups,
+    total_items_ratio = total_items / total_cleanups
+  )
+
+### graph it! 
+top5_averaged_long <- tidyr::pivot_longer(top5items_average, 
+                                            cols = c(plastic_fragments_ratio:total_items_ratio),
+                                            names_to = "Category", values_to = "Value")
+
+### define colors 
+custom_colors_2 <- c("plastic_fragments_ratio" = "#016c59",
+                   "wrappers_ratio" = "#1c9099",
+                   "bottle_caps_ratio" = "#67a9cf",
+                   "bottles_ratio" = "#a6bddb",
+                   "glass_fragments_ratio" = "#d0d1e6",
+                   "total_items_ratio" = "black")
+
+### define legend 
+legend_order_2 <- c("total_items_ratio", "plastic_fragments_ratio", "wrappers_ratio", "bottle_caps_ratio", "bottles_ratio", "glass_fragments_ratio")
+
+top5_averaged_long$Category <- factor(top5_averaged_long$Category, levels = legend_order_2)
+
+ggplot(data = top5_averaged_long, aes(x = year, y = Value, color = Category)) +
+  geom_line() +
+  geom_point() +
+  scale_color_manual(values = custom_colors, 
+                     labels = c("Total Items", "Plastic Fragments", "Wrappers", "Bottle Caps", "Bottles", "Glass Fragments"), name = "Item Category") +
+  scale_y_continuous(labels = comma) + 
+  labs(title = "Top Five Debris Item Categories Over Time Based on Effort",
+       x = "Year",
+       y = "Average Annual Count per Cleanup",
+       color = "Category") +
+  theme_minimal() + 
+  theme(axis.line = element_blank(),
+        axis.text.x = element_text(angle = 0, hjust = .5),
+        axis.ticks = element_blank(), 
+        axis.title.x = element_text(margin = margin(t = 15), size = 12), 
+        axis.title.y = element_text(margin = margin(r = 15), size = 12), 
+        plot.title = element_text(size = 15, hjust = 0.5))
+
+```
+
+## time series of cleanups by year
+
+```{r}
+#make a year column for grouping, extracting the year from each row from the date column 
+all_data$year <- format(all_data$date, "%Y")
+
+#group by year and calculate total cleanups/year
+all_data_sum <- all_data %>%
+  group_by(year) %>%
+  summarise(total_cleanups = n()) %>% 
+   filter(!is.na(year)) %>% 
+  mutate(total_cleanups = as.numeric(total_cleanups))
+
+ggplot(all_data_sum, aes(x = year, y = total_cleanups)) +
+  geom_bar(stat = "identity", fill = "#67a9cf") +  # Use stat = "identity" to plot total_cleanups directly
+  geom_text(aes(label = total_cleanups), vjust = -0.5, size = 3.2) +  # Add text labels above bars
+  labs(x = "Year", y = "Total Number of Cleanups", title = "Total Debris Cleanups by Year in the CHNMS") +
+  theme_minimal() +
+  theme(axis.line = element_blank(),
+        axis.text.x = element_text(angle = 0, hjust = .5, size = 10),
+        axis.text.y = element_text(size = 10), 
+        axis.ticks = element_blank(), 
+        axis.title.x = element_text(margin = margin(t = 15), size = 12), 
+        axis.title.y = element_text(margin = margin(r = 15), size = 12), 
+        plot.title = element_text(size = 15, hjust = 0.5))
+```
+
+## all item types!
+
+```{r}
+sum_all_items <- summary_item[order(summary_item$count, decreasing = TRUE), ]
+
+horizontal_bar_chart <- ggplot(sum_all_items, aes(x = count, y = reorder(item_type, count))) +
+  geom_bar(stat = "identity", fill = "#67a9cf") +
+  geom_text(aes(label = comma(count)), hjust = -0.2, size = 3.2) +
+  labs(title = "Total Counts of Every Item Type", x = "Number of Items", y = "Item Type") +  # Adjust the axis labels
+  theme_minimal() + 
+  scale_y_discrete(labels = function(x) gsub("_", " ", str_to_title(x))) + 
+  scale_x_continuous(labels = comma_format(), limits = c(0, 55000), , breaks = seq(0, 55000, by = 10000)) + 
+  theme(axis.text.y = element_text(size = 10), 
+        axis.title.x = element_text(margin = margin(t = 15), size = 12), 
+        axis.title.y = element_text(margin = margin(r = 15), size = 12), 
+        plot.title = element_text(size = 15, hjust = 0.5))
+      
+horizontal_bar_chart
+
+ggsave("FINAL_horizontal_bar_chart.png", horizontal_bar_chart, width = 8, height = 8)  # Adjust width and height as needed
+
+
+```

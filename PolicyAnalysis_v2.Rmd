@@ -1,0 +1,347 @@
+---
+title: "PolicyAnalysis_v2"
+output: html_document
+date: "2024-03-28"
+---
+*Analyze Three Policies to Determine Their Impacts on Marine Debris*
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(here) 
+library(tidyverse)
+library(sf)
+library(tmap)
+library(dplyr)
+library(purrr) 
+library(ggplot2)
+library(cowplot)
+library(grid)
+library(gridExtra)
+```
+
+## Load in data
+```{r}
+#load all CHNMS marine debris data from all four sources 
+all_data <- read_csv(here("Outputs", "all_data_combined.csv")) 
+#and make distance_cleaned NA instead of 0 for later analysis 
+
+#load in spatial data for later local analyses 
+seg6_buf <- read_sf(dsn = here("WorkingData", "hotspot_segment_output", "buffer"), 
+                    layer = "segment6_buffer") %>% #this segment is from the hotspot analysis, and covers the Five Cities area, including Grover Beach 
+  janitor::clean_names() %>% 
+  st_set_crs(4326) %>% #this is the projection NOAA's sanctuary shapefiles are in 
+  st_transform(crs = 4269) 
+```
+
+## Data cleaning 
+```{r}
+#add county data to marine debris data for county-level analyses
+
+latitude_division <- 34.97439839 #this is the division between the two counties, any cleanup with a latitude greater than this number is in SLO County, any cleanup with a latitude less than this number is in SB County 
+
+all_data_counties <- all_data %>% 
+  mutate(county = ifelse(lat >= latitude_division, "slo", "sb")) #add county column to marine debris data 
+```
+
+```{r}
+# make a df for SLO County for future analysis 
+slo_data <- all_data_counties %>%
+  filter(county == "slo")
+
+# #SB County df in case it's needed later 
+# sb_data <- all_data_counties %>%
+#   filter(county == "sb")
+```
+
+```{r}
+#make df with all marine debris data into spatial data 
+all_data$lat <- as.numeric(all_data$lat)
+all_data$long <- as.numeric(all_data$long)
+
+data_sf <- st_as_sf(all_data, coords = c('long', 'lat')) %>% 
+  st_set_crs(4269) 
+
+#There's one cleanup in SB County with the wrong latitude and longitude points, manually fix it 
+row_index <- 903  
+data_sf$geometry[row_index] <- st_sfc(st_point(c(-120.4416843, 34.45171)))
+
+# #visual check 
+# ggplot() + 
+#   geom_sf(data = seg6_buf) + 
+#   geom_sf(data = data_sf) +
+#   theme_bw()
+
+#convert back to a df for later analysis (with corrected lat, long point)
+all_data$lat <- st_coordinates(data_sf)[, 2] #second column is latitude
+all_data$long <- st_coordinates(data_sf)[, 1]
+
+```
+
+```{r}
+#filter and make a new dataset that's specifically for the Grover Beach analysis, using the seg_6 buffer from the hotspot analysis 
+
+grover_data <- st_filter(data_sf, seg6_buf) #spatially filter the spatial data to only include the data located within the seg6_buf (the Five Cities area)
+
+#turn filtered Grover Beach sf data back into a df
+grover_data$lat <- st_coordinates(grover_data)[, 2] #second column is latitude
+grover_data$long <- st_coordinates(grover_data)[, 1]
+```
+
+## Policy Analysis -- Grover Beach Ordinance Number 18-01
+Plastic Food Takeout Containers in Five Cities Area 
+```{r} 
+#filter data to analyze only the category affected by the foam takeout container ban: "plastic takeout containers"
+grover_data_filter <- grover_data %>% 
+  filter(complete.cases(distance_cleaned)) %>% #filter out any entries that don't have distance or have a distance of zero
+  filter(distance_cleaned != 0) %>% 
+  mutate(takeoutcontainer_density = takeout_food_containers_plastic/distance_cleaned) #the number of takeout containers found in each cleanup divided by the distance each cleanup cleaned, giving the number of takeout containers per mile per cleanup (density)
+
+#the date Ordinance No. 18-01 went into effect
+grover_takeout_policy_date <- as.Date("2018-07-22") #gives a date for a vertical line on a graph 
+
+#aggregate data by month for easier visualization 
+grover_data_takeoutcontainer_density <- grover_data_filter %>% 
+  mutate(month = format(date, "%Y-%m")) %>% 
+  group_by(month) %>% 
+  summarise(takeout_food_containers_plastic_density = mean(takeoutcontainer_density)) #gives the average takeout container density per month 
+
+#visualize plastic takeout container density 
+
+wrapped_title_grover <- str_wrap("Grover Beach Ordinance 18-01", width = 20) #for formatting later in combined figure 
+
+plot1 <- ggplot(grover_data_takeoutcontainer_density, aes(x = as.Date(paste0(month, "-01")), y = takeout_food_containers_plastic_density)) +
+  geom_point(size = .6) + #customize points 
+  geom_vline(xintercept = grover_takeout_policy_date, linetype = "dashed", color = "red") + #add the date the policy was implemented to the graph 
+  labs(title = wrapped_title_grover, subtitle = "Plastic Takeout Containers", x = "", y = "") +
+  theme_minimal() + 
+  theme(
+    axis.text.x = element_text(size = 9),
+    axis.title.x = element_text(size = 10, margin = margin(t = 10)), 
+   axis.title.y = element_text(size = 10, margin = margin(r = 10)),
+    plot.title = element_text(size = 12), 
+    plot.subtitle = element_text(size = 10)
+  ) +  #customize text sizes across the graph 
+  scale_y_continuous(labels = scales::comma) + #add commas to y-axis labels 
+  labs(y = str_wrap("Density (mean # of items/mile per month)", width = 25)) + #for formatting later in combined figure 
+  scale_x_date(breaks = as.Date(c("2016-01-01", "2020-01-01", "2024-01-01")), date_labels = "%Y", limits = as.Date(c("2016-01-01", "2024-01-01"))) #customize the x-axis labels 
+
+#plot1
+
+```
+Grover Beach Ordinance Number 18-01 corresponding beach cleanup effort 
+```{r}
+
+#using grover_data_filter, which is filtered to only the data that has distance values, aggregate effort (distance_cleaned) by month 
+
+#generate a sequence of all months to include 
+all_months <- data.frame(month = seq(as.Date("2016-01-01"), as.Date("2023-10-01"), by = "month")) %>% 
+  mutate(month = format(month, "%Y-%m"))
+
+#sum effort by month 
+grover_effort <- grover_data_filter %>% 
+  mutate(month = format(date, "%Y-%m")) %>% 
+  group_by(month) %>% 
+  summarise(summed_effort = sum(distance_cleaned)) #total miles cleaned each month 
+
+# join all_months to the effort dataset (since some months didn't have cleanups, and those months should still be included but just have a value of zero for cleanup effort)
+grover_effort <- all_months %>%
+  left_join(grover_effort, by = "month") %>%
+  replace(is.na(.), 0) 
+
+#visualize monthly cleanup effort for the Grover Beach area 
+plot4 <- ggplot(grover_effort, aes(x = as.Date(paste0(month, "-01")), y = summed_effort)) +
+  geom_line() +
+  geom_vline(xintercept = grover_takeout_policy_date, linetype = "dashed", color = "red") + 
+  theme_minimal() + 
+  labs(title = "Cleanup Effort", x ="", y = "") +
+  theme( 
+    axis.text.x = element_text(size = 9),
+    axis.title.y = element_text(size = 10, margin = margin(r = 10)),
+    axis.title.x = element_text(size = 10, margin = margin(t = 10)), plot.title = element_text(size = 10)
+  ) +  
+  scale_y_continuous(labels = scales::comma) +  
+  labs(y = str_wrap("Summed Distance Cleaned (miles)", width = 25)) + 
+    scale_x_date(breaks = as.Date(c("2016-01-01", "2020-01-01", "2024-01-01")), date_labels = "%Y", limits = as.Date(c("2016-01-01", "2024-01-01"))) 
+
+#plot4
+```
+## Policy Analysis -- California AB-1884 
+Plastic Straw Ban Across the Whole State (so impacting the whole CHNMS) 
+```{r}
+#filter data to analyze only the category affected by the plastic straw ban: "straws and stirrers"
+all_data_filtered <- all_data %>% #all marine debris cleanups (with corrected lat, long for the one entry)
+  filter(complete.cases(distance_cleaned)) %>% #filter out categories that don't have a distance measure 
+  filter(distance_cleaned != 0) %>% 
+  mutate(straws_stirrers_density = straws_stirrers/distance_cleaned) #the number of straws and stirrers found in each cleanup divided by the distance cleaned by each cleanup, giving a density as the number of straws and stirrers/mile per cleanup 
+
+#the data AB-1884 went into effect 
+ca_straws_stirrers_policy_date <- as.Date("2019-01-01") #gives a date fro a vertical line on a graph 
+
+#aggregate data by month for easier visualization 
+ca_data_straws_stirrers_density <- all_data_filtered %>% 
+  mutate(month = format(date, "%Y-%m")) %>% 
+  group_by(month) %>% 
+  summarise(ca_straws_stirrers_density = mean(straws_stirrers_density)) #gives the average straw and stirrer density per month 
+
+#visualize straw and stirrer density 
+
+wrapped_title_chnms <- str_wrap("CHNMS AB-1884", width = 9) 
+
+plot3 <- ggplot(ca_data_straws_stirrers_density, aes(x = as.Date(paste0(month, "-01")), y = ca_straws_stirrers_density)) +
+ geom_point(size = .6) + 
+  geom_vline(xintercept = ca_straws_stirrers_policy_date, linetype = "dashed", color = "red") + 
+  theme_minimal() + 
+  labs(title = wrapped_title_chnms, subtitle = "Straws and Stirrers", x = "", y = "") +
+  theme(
+    axis.text.x = element_text(size = 9),
+    axis.title.y = element_text(size = 12),
+    axis.title.x = element_text(size = 12, margin = margin(t = 10)), plot.title = element_text(size = 12), plot.subtitle = element_text(size = 10)
+  ) +  
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_date(breaks = as.Date(c("2016-01-01", "2020-01-01", "2024-01-01")), date_labels = "%Y", limits = as.Date(c("2016-01-01", "2024-01-01"))) 
+
+#plot3
+
+```
+California AB-1884 corresponding beach cleanup effort 
+```{r}
+
+#using all_data_filtered, which is filtered to only the data that has distance values, aggregate effort (distance_cleaned) by month 
+
+#sum effort by month 
+ca_data_effort <- all_data_filtered %>% 
+  mutate(month = format(date, "%Y-%m")) %>% 
+  group_by(month) %>% 
+  summarise(summed_effort = sum(distance_cleaned)) #total miles cleaned by month across the CHNMS 
+
+# join all_months to the effort dataset (since some months didn't have cleanups, and those months should still be included but just have a value of zero for cleanup effort)
+ca_data_effort <- all_months %>%
+  left_join(ca_data_effort, by = "month") %>%
+  replace(is.na(.), 0) 
+
+#visualize monthly cleanup effort for the whole CHNMS 
+plot6 <- ggplot(ca_data_effort, aes(x = as.Date(paste0(month, "-01")), y = summed_effort)) +
+  geom_line() +
+  geom_vline(xintercept = ca_straws_stirrers_policy_date, linetype = "dashed", color = "red") + 
+  theme_minimal() + 
+  labs(title = "Cleanup Effort", x = "", y = "") +
+  theme( 
+    axis.text.x = element_text(size = 9),
+    axis.title.y = element_text(size = 13),
+    axis.title.x = element_text(size = 13, margin = margin(t = 10)), plot.title = element_text(size = 10)
+  ) +  
+  scale_y_continuous(labels = scales::comma) + 
+    scale_x_date(breaks = as.Date(c("2016-01-01", "2020-01-01", "2024-01-01")), date_labels = "%Y", limits = as.Date(c("2016-01-01", "2024-01-01"))) 
+
+# plot6
+
+```
+## Policy Analysis -- SLO County Ordinance 2019-1
+Plastic Food Takeout Containers in SLO County 
+```{r}
+#filter data to analyze only the category affected by the foam takeout container ban: "plastic takeout containers"
+slo_data_filtered <- slo_data %>% 
+  filter(complete.cases(distance_cleaned)) %>% #filter out any entries that don't have distance or have a distance of zero
+  filter(distance_cleaned != 0) %>% 
+  mutate(takeoutcontainer_density = takeout_food_containers_plastic/distance_cleaned) #the number of takeout containers found in each cleanup divided by the distance each cleanup cleaned, giving the number of takeout containers per mile per cleanup (density)
+
+#the date Ordinance No. 2019-1 went into effect
+slo_takeout_policy_date <- as.Date("2021-04-9")
+
+#aggregate data by month for easier visualization 
+slo_data_takeoutcontainer_density <- slo_data_filtered %>% 
+  mutate(month = format(date, "%Y-%m")) %>% 
+  group_by(month) %>% 
+  summarise(takeout_food_containers_plastic_density = mean(takeoutcontainer_density)) #gives the average takeout container density per month 
+
+#visualize plastic takeout container density 
+
+wrapped_title_slo <- str_wrap("SLO County Ordinance 2019-1", width = 19) #formatting for later in combined figure 
+
+plot2 <- ggplot(slo_data_takeoutcontainer_density, aes(x = as.Date(paste0(month, "-01")), y = takeout_food_containers_plastic_density)) +
+  geom_point(size = .6) + 
+  geom_vline(xintercept = slo_takeout_policy_date, linetype = "dashed", color = "red") + 
+  theme_minimal() + 
+  labs(title = wrapped_title_slo, subtitle = "Plastic Takeout Containers", x = "", y = "") +
+  theme(
+    axis.text.x = element_text(size = 9),
+    axis.title.y = element_text(size = 13),
+    axis.title.x = element_text(size = 13, margin = margin(t = 10)), 
+    plot.title = element_text(size = 12), 
+    plot.subtitle = element_text(size = 10)) +  
+  scale_y_continuous(labels = scales::comma) + 
+    scale_x_date(breaks = as.Date(c("2016-01-01", "2020-01-01", "2024-01-01")), date_labels = "%Y", limits = as.Date(c("2016-01-01", "2024-01-01"))) 
+
+#plot2
+
+```
+SLO County Ordinance Number 2019-1 corresponding beach cleanup effort 
+```{r}
+#using slo_data_filtered, which is filtered to only the data that has distance values, aggregate effort (distance_cleaned) by month 
+
+#sum effort by month 
+slo_data_effort <- slo_data_filtered %>% 
+  mutate(month = format(date, "%Y-%m")) %>% 
+  group_by(month) %>% 
+  summarise(summed_effort = sum(distance_cleaned)) #total miles cleaned each month 
+
+# join all_months to the effort dataset (since some months didn't have cleanups, and those months should still be included but just have a value of zero for cleanup effort)
+slo_data_effort <- all_months %>%
+  left_join(slo_data_effort, by = "month") %>%
+  replace(is.na(.), 0) 
+
+#visualize monthly cleanup effort for SLO County 
+plot5 <- ggplot(slo_data_effort, aes(x = as.Date(paste0(month, "-01")), y = summed_effort)) +
+  geom_line() +
+  geom_vline(xintercept = slo_takeout_policy_date, linetype = "dashed", color = "red") + 
+  theme_minimal() + 
+  labs(title = "Cleanup Effort", x = "Date", y = "") +
+  theme( 
+    axis.text.x = element_text(size = 9),
+    axis.title.y = element_text(size = 10),
+    axis.title.x = element_text(size = 12, margin = margin(t = 10)), plot.title = element_text(size = 10)
+  ) +  
+  scale_y_continuous(labels = scales::comma) + 
+    scale_x_date(breaks = as.Date(c("2016-01-01", "2020-01-01", "2024-01-01")), date_labels = "%Y", limits = as.Date(c("2016-01-01", "2024-01-01"))) 
+
+#plot5
+
+```
+
+## Combined Figure 
+
+```{r}
+
+#define margins for enough white space on right side of figure to not cut of x-axis tick marks 
+default_margin <- unit(c(0, 0, 0, 0), "cm")
+adjusted_margin <- unit(c(0, 0.5, 0, 0), "cm") #adjusting margin for plots 3 and 6 (the two on the right-hand side)
+
+#create the composite figure
+composite_figure <- plot_grid(
+  plot1 + theme(plot.margin = default_margin),
+  plot2 + theme(plot.margin = default_margin),
+  plot3 + theme(plot.margin = adjusted_margin),
+  plot4 + theme(plot.margin = default_margin),
+  plot5 + theme(plot.margin = default_margin),
+  plot6 + theme(plot.margin = adjusted_margin),
+  nrow = 2, ncol = 3, align = "v", rel_heights = c(1.2, 1)
+)
+
+#add labels to the three panels (along the top graphs)
+composite_figure <- composite_figure + 
+  annotate("text", x = c(0.075, 0.41, 0.74), y = c(0.95, 0.95, 0.95), label = c("A.", "B.", "C."), size = 5, color = "#8f8f8f")
+
+composite_figure
+
+```
+
+
+```{r}
+#combined figure for public presentations and executive report 
+
+composite_figure_2 <- plot_grid(plot1, plot2) +  annotate("text", x = c(0.075, 0.55), y = c(0.95, 0.95), label = c("A.", "B."), size = 5, color = "#8f8f8f") + annotate("text", x = .53, y = .045, label = "Date", size = 4, color = "black")
+  
+
+composite_figure_2
+```
+

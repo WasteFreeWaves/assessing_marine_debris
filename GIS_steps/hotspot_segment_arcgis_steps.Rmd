@@ -1,0 +1,66 @@
+---
+title: "hotspot_segment_arcgis_steps"
+output: html_document
+date: "2024-05-10"
+---
+
+This document provides step-by-step information about how the CHNMS coastline was segmented for hotspot analyses in ArcGIS Pro. Broadly, the coastline was segmented into 15 equidistant segments of approximately 9.1 miles. This distance and the number of segments were based on geographic features. The goal was to keep urban areas in separate segments from private lands. For example, Vandenberg Space Force Base was contained in two segments separate from other segments that contained neighboring urban areas. 
+
+**1. 	Loaded the CHNMS_coast_clip layer in**
+
+- This is the shapefile that is a line for the full CHNMS coastline, including the maximum possible boundary extents from Cambria, California to Naples, California 
+
+**2.	Set the projection of the map to NAD83 (ESPG 4269), which is the projection of the shapefiles for the study area**
+
+**3.	Use the Feature Class to Feature Class tool**
+
+- Add the shapefile to the geodatabase that the project created so it is editable 
+- Made a CHNMS_fullcoast layer saved in the hotspotsegment.gdb 
+
+**4.	Dissolve tool **
+
+-	Make the CHNMS coast only have one value in the attribute table, deleting where SLO and SB separate CHNMS_fullcoast  CHNMS_fullcoast_Dissolve 
+-	Leave everything blank in the fields, and leave the original boxes checked 
+
+**5.	In the edit menu, use the “divide” feature to figure out where we want the segments to be divided** 
+
+-	Click on the shapefile and then use “equal parts” as the method, selecting 15 
+-	(total line length is 724,233.44 feet, divided into 48,282.23 feet, ~9.1 miles) 
+-	Make note of these numbers 
+
+**6.	Generate Points Along Lines (used 48,282.23 feet, but need to adjust for equal areas) **
+
+-	Input the CHNMS_fullcoast_Dissolve layer
+-	Output feature class is named points_along_lines
+-	Point placement is by distance 
+-	Distance is whatever you set it to, with feet
+-	Include end points 
+-	Run the model: points_along_lines
+
+**7.	In the Edit Pane, use the Split tool **
+
+- The input features should be each point on the line from the points_along_lines layer (make sure to select all the relevant points) 
+- Target features should be the CHNMS_fullcoast_Dissolve layer
+- Click split, check that the attribute table for CHNMS_fullcoast_Dissolve layer has corresponding rows for each segment 
+-	Save your edits in the “Manage edits” portion of the Edit tab 
+
+**8.	In the attribute table, highlight each row one at a time and then click on the CHNMS_fullcoast_Dissolve layer in the table of contents: Data to Export Features, save as a .shp file in the output folder **
+
+-	Do this for each segment to make a new .shp file for each segment, and they should load as separate layer files in the Table of Contents 
+
+**9.	Buffer**
+
+-	Make a buffer around each individual segment to filter all the data points into different segments 
+-	Distance: 500 meters (linear unit) 
+-	Side type: full 
+-	End type: flat 
+-	Method: Planar 
+-	Dissolve type: no dissolve 
+
+**10.	Follow the same steps to export the buffer files as for the coastline segment files (step 8) **
+
+
+**11.	Copy the exported files from the ArcGIS project folder to the GitHub folder**
+
+
+**12.	Buffer and segment files can be found in the folder:  wastefreewaves/WorkingData/hotspot_segment_output **

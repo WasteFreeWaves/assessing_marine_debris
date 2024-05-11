@@ -1,0 +1,661 @@
+---
+title: "Hotspots_v2"
+output: html_document
+date: "2024-04-17"
+---
+
+*Identify Hotspots of Debris Along the CHNMS Coastline* 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(here) 
+library(tidyverse)
+library(sf)
+library(tmap)
+library(dplyr)
+library(purrr) 
+```
+
+# Load in data 
+
+```{r}
+
+all_data <- read_csv(here("Outputs", "all_data_combined.csv")) #all marine debris cleanups from the sanctuary area 
+
+#note that shapefiles exist for each segment of the coastline (created in ArcGIS), but aren't needed for anlaysis. If needed, they are accessible here: WorkingData -> hotspot_segment_output -> 
+  #segmented_CHNMS_full (the full coastline)
+  #segment1 all the way up to segment15
+#projection should be in crs4269 to match NOAA's sanctuary boundary shapefile 
+
+#buffers for each segment (created in ArcGIS) are used to filter data into each segment -- load in buffer shapefiles 
+
+seg15_buf <- read_sf(dsn = here("WorkingData", "hotspot_segment_output", "buffer"), 
+                    layer = "segment15_buffer") %>% 
+  janitor::clean_names() %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269) #the buffer for segment 15, with the projection to match the NOAA sanctuary boundary 
+
+seg14_buf <- read_sf(dsn = here("WorkingData", "hotspot_segment_output", "buffer"), 
+                    layer = "segment14_buffer") %>% 
+  janitor::clean_names() %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+seg13_buf <- read_sf(dsn = here("WorkingData", "hotspot_segment_output", "buffer"), 
+                    layer = "segment13_buffer") %>% 
+  janitor::clean_names() %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+seg12_buf <- read_sf(dsn = here("WorkingData", "hotspot_segment_output", "buffer"), 
+                    layer = "segment12_buffer") %>% 
+  janitor::clean_names() %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+seg11_buf <- read_sf(dsn = here("WorkingData", "hotspot_segment_output", "buffer"), 
+                    layer = "segment11_buffer") %>% 
+  janitor::clean_names() %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+seg10_buf <- read_sf(dsn = here("WorkingData", "hotspot_segment_output", "buffer"), 
+                    layer = "segment10_buffer") %>% 
+  janitor::clean_names() %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+seg9_buf <- read_sf(dsn = here("WorkingData", "hotspot_segment_output", "buffer"), 
+                    layer = "segment9_buffer") %>% 
+  janitor::clean_names() %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+seg8_buf <- read_sf(dsn = here("WorkingData", "hotspot_segment_output", "buffer"), 
+                    layer = "segment8_buffer") %>% 
+  janitor::clean_names() %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+seg7_buf <- read_sf(dsn = here("WorkingData", "hotspot_segment_output", "buffer"), 
+                    layer = "segment7_buffer") %>% 
+  janitor::clean_names() %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+seg6_buf <- read_sf(dsn = here("WorkingData", "hotspot_segment_output", "buffer"), 
+                    layer = "segment6_buffer") %>% 
+  janitor::clean_names() %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+seg5_buf <- read_sf(dsn = here("WorkingData", "hotspot_segment_output", "buffer"), 
+                    layer = "segment5_buffer") %>% 
+  janitor::clean_names() %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+seg4_buf <- read_sf(dsn = here("WorkingData", "hotspot_segment_output", "buffer"), 
+                    layer = "segment4_buffer") %>% 
+  janitor::clean_names() %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+seg3_buf <- read_sf(dsn = here("WorkingData", "hotspot_segment_output", "buffer"), 
+                    layer = "segment3_buffer") %>% 
+  janitor::clean_names() %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+seg2_buf <- read_sf(dsn = here("WorkingData", "hotspot_segment_output", "buffer"), 
+                    layer = "segment2_buffer") %>% 
+  janitor::clean_names() %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+seg1_buf <- read_sf(dsn = here("WorkingData", "hotspot_segment_output", "buffer"), 
+                    layer = "segment1_buffer") %>% 
+  janitor::clean_names() %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+```
+
+```{r}
+#segment lines (created in ArcGIS) loaded in for later visualization or as needed 
+
+CHNMS_segments <- read_sf(dsn = here("WorkingData", "hotspot_segment_output"), 
+                    layer = "segmented_CHNMS_full") %>% 
+  janitor::clean_names() %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269) #to put into crs of the boundary shapefiles
+
+seg1 <- read_sf(dsn = here("WorkingData", "hotspot_segment_output"), 
+                    layer = "segment1") %>% 
+  janitor::clean_names() %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+seg2 <- read_sf(dsn = here("WorkingData", "hotspot_segment_output"), 
+                    layer = "segment2") %>% 
+  janitor::clean_names() %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+seg3 <- read_sf(dsn = here("WorkingData", "hotspot_segment_output"), 
+                    layer = "segment3") %>% 
+  janitor::clean_names() %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+seg4 <- read_sf(dsn = here("WorkingData", "hotspot_segment_output"), 
+                    layer = "segment4") %>% 
+  janitor::clean_names() %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+seg5 <- read_sf(dsn = here("WorkingData", "hotspot_segment_output"), 
+                    layer = "segment5") %>% 
+  janitor::clean_names() %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+seg6 <- read_sf(dsn = here("WorkingData", "hotspot_segment_output"), 
+                    layer = "segment6") %>% 
+  janitor::clean_names() %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+seg7 <- read_sf(dsn = here("WorkingData", "hotspot_segment_output"), 
+                    layer = "segment7") %>% 
+  janitor::clean_names() %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+seg8 <- read_sf(dsn = here("WorkingData", "hotspot_segment_output"), 
+                    layer = "segment8") %>% 
+  janitor::clean_names() %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+seg9 <- read_sf(dsn = here("WorkingData", "hotspot_segment_output"), 
+                    layer = "segment9") %>% 
+  janitor::clean_names() %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+seg10 <- read_sf(dsn = here("WorkingData", "hotspot_segment_output"), 
+                    layer = "segment10") %>% 
+  janitor::clean_names() %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+seg11 <- read_sf(dsn = here("WorkingData", "hotspot_segment_output"), 
+                    layer = "segment11") %>% 
+  janitor::clean_names() %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+seg12 <- read_sf(dsn = here("WorkingData", "hotspot_segment_output"), 
+                    layer = "segment12") %>% 
+  janitor::clean_names() %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+seg13 <- read_sf(dsn = here("WorkingData", "hotspot_segment_output"), 
+                    layer = "segment13") %>% 
+  janitor::clean_names() %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+seg14 <- read_sf(dsn = here("WorkingData", "hotspot_segment_output"), 
+                    layer = "segment14") %>% 
+  janitor::clean_names() %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+
+seg15 <- read_sf(dsn = here("WorkingData", "hotspot_segment_output"), 
+                    layer = "segment15") %>% 
+  janitor::clean_names() %>% 
+  st_set_crs(4326) %>% 
+  st_transform(crs = 4269)
+```
+
+# Data Cleaning 
+
+```{r}
+#make distance_cleaned NA instead of 0 for later analysis 
+all_data <- all_data %>% mutate(distance_cleaned = na_if(distance_cleaned, 0))
+
+#add distance_cleaned to MDMAP entries 
+for (i in seq_len(nrow(all_data))) {
+  #check if site_length is not missing and if it's 100 for the current row, which is the transect length in meters for MDMAP entries
+  if (!is.na(all_data[i, "site_length"]) && all_data[i, "site_length"] == 100) {
+    #if yes, update distance_cleaned to 0.0124274 (the mileage equivalent for 100 meters)
+    all_data[i, "distance_cleaned"] <- 0.0124274
+  }
+}
+
+#make all_data into a shapefile for distribution between the buffers 
+all_data$lat <- as.numeric(all_data$lat)
+all_data$long <- as.numeric(all_data$long)
+
+data_sf <- st_as_sf(all_data, coords = c('long', 'lat')) %>% 
+  st_set_crs(4269) 
+
+#There's one MDMAP entry that's wrong (period is in the wrong place for lat/long coordinates), manually fixing it  
+row_index <- 903  
+data_sf$geometry[row_index] <- st_sfc(st_point(c(-120.4416843, 34.45171))) #update the coordinate with the proper value 
+```
+
+```{r}
+#visual check to make sure everything is loading properly (all looks good)
+# ggplot() + 
+#   geom_sf(data = data_sf) +
+#   geom_sf(data = seg3_buf) +
+#   geom_sf(data = seg14_buf) +
+#   theme_bw()
+```
+
+# Analysis - Segmenting Data 
+
+```{r}
+
+#use a loop to spatially filter data to the proper segments using the buffers, add lat and long columns to each new segment's dataset, and convert back to dataframes using the spatially filtered data 
+
+buffers <- list(seg1_buf, seg2_buf, seg3_buf, seg4_buf, seg5_buf,
+                seg6_buf, seg7_buf, seg8_buf, seg9_buf, seg10_buf,
+                seg11_buf, seg12_buf, seg13_buf, seg14_buf, seg15_buf)
+
+segmented_data_list <- list()
+
+for (i in seq_along(buffers)) {
+  segmented_data <- st_filter(data_sf, buffers[[i]]) #filter data from data_sf to each buffer 
+  
+  segmented_data$lat <- st_coordinates(segmented_data)[, 2]
+  segmented_data$long <- st_coordinates(segmented_data)[, 1] #add lat and long coordinates to each new segment dataset 
+  
+  segmented_data_df <- as.data.frame(segmented_data) #convert each segment to a df 
+  
+  segmented_data_list[[i]] <- segmented_data_df
+}
+
+#assign data from loop to the proper, new df for future analysis
+names <- paste0("seg", 1:15, "_data")
+for (i in seq_along(segmented_data_list)) {
+  assign(names[i], segmented_data_list[[i]])
+}
+
+```
+
+# Analysis - Trash Density 
+
+```{r}
+### trash density is the total trash within each segment, divided by the length of the segment, giving you a number of items per mile value (doesn't account for effort) 
+
+segments_data <- list(seg1_data, seg2_data,seg3_data, seg4_data, seg5_data,
+                  seg6_data, seg7_data, seg8_data, seg9_data, seg10_data,
+                  seg11_data, seg12_data, seg13_data, seg14_data, seg15_data)
+
+totals_per_segment <- numeric(length(segments_data)) #to store results 
+
+#use a loop to calculate the total trash within each segment 
+for (i in seq_along(segments_data)) {
+  totals_per_segment[i] <- sum(segments_data[[i]]$total_items)
+}
+
+#create a new df with the stacked data across all segments, ensuring the segments are in the proper order 
+all_segments <- do.call(rbind, mget(paste0("seg", 1:15)))
+
+all_segments$segment_number <- as.numeric(gsub("seg", "", rownames(all_segments))) #add a column with the segment number
+
+all_segments$total_items <- totals_per_segment #add in the total number of debris items for each segment 
+
+#sum(all_segments$total_items)
+
+all_segments$trash_density_per_mile <- all_segments$total_items / 9.1443617424 #divide by the length of each segment for density in miles (items/mile)
+
+```
+
+# Analysis - Hotspot - Events 
+
+```{r}
+### control for effort using the number of events
+
+means_per_segment <- numeric(length(segments_data))
+
+#use a loop to calculate the mean number of items/cleanup for each segment
+for (i in seq_along(segments_data)) {
+  means_per_segment[i] <- mean(segments_data[[i]]$total_items)
+}
+
+#add a new column to the all_segments df with the average number of items collected per cleanup in each segment 
+all_segments$average_items_per_event <- means_per_segment
+```
+
+# Analysis - Hotspot - People 
+
+```{r}
+### control for effort using the number of people (doesn't include MDT data because they didn't document the number of people) 
+
+# vector to store means/segment 
+means_items_per_person <- numeric(length(segments_data))
+
+#calculate the average number of items per person across all cleanups for each segment (calculates the number of items per person for every cleanup, then takes the mean number of items/person for each segment)
+for (i in seq_along(segments_data)) {
+  segments_data[[i]]$items_per_person <- segments_data[[i]]$total_items / segments_data[[i]]$people 
+  means_items_per_person[i] <- mean(segments_data[[i]]$items_per_person, na.rm = TRUE)
+}
+
+#add a new column to the all_segments df with the average number of items collected per person in each segment 
+all_segments$mean_items_per_person <- means_items_per_person
+```
+
+
+# Analysis - Hotspot - Distance 
+
+```{r}
+### control for effort using the distance cleaned 
+
+#vector to store menas/segment 
+items_per_mile_means <- numeric(length(segments_data))
+
+#calculate the average number of items per mile across all cleanups for each segment (calculates the average number of items per mile for every cleanup, then takes the mean number of items/mile for each segment) 
+for (i in seq_along(segments_data)) {
+  current_segment_data <- segments_data[[i]] %>% 
+    filter(!is.na(distance_cleaned)) #filter out data with an NA distance value
+
+  current_segment_data$items_per_mile <- current_segment_data$total_items / current_segment_data$distance_cleaned #calculate items per mile for each cleanup
+  
+  items_per_mile_means[i] <- mean(current_segment_data$items_per_mile, na.rm = TRUE) #mean number items/mile for each segment
+}
+
+#add a new column to the all_segments df with the average number of items per mile in each segment 
+all_segments$items_per_mile_mean <- items_per_mile_means
+```
+
+# Export Data 
+```{r}
+#export all_segments for later use in GIS for visualization 
+
+#convert data to a sf object
+all_segments_sf <- st_as_sf(all_segments)
+
+shapefile_path <- file.path("Outputs", "all_segments_hotspots.shp")
+
+# Write the sf object to a shapefile
+#st_write(all_segments_sf, shapefile_path)
+
+```
+
+# Summary Stats by Hotspot Segment 
+```{r}
+### focusing on our three hotspot areas -- Morro Bay (seg 3), Gaviota coastline (seg 14), and Avila Beach/Five Cities area (segs 5 and 6)
+
+#join the Avila Beach and Five Cities areas
+seg5_and_6 <- rbind(seg5_data, seg6_data)
+```
+material type by hotspot segment 
+```{r}
+#MORRO BAY 
+morro_material <- seg3_data %>% 
+   select(c(id:total_items, plastic:paper_wood)) #make a smaller dataset for analysis of the Morro Bay segment 
+
+#item counts by material type
+morro_items_total <- sum(morro_material$total_items, na.rm = TRUE)
+morro_items_plastic <- sum(morro_material$plastic, na.rm = TRUE)
+morro_items_glass <- sum(morro_material$glass, na.rm = TRUE)
+morro_items_metal <- sum(morro_material$metal, na.rm = TRUE)
+morro_items_cloth <- sum(morro_material$cloth, na.rm = TRUE)
+morro_items_mixed <- sum(morro_material$mixed, na.rm = TRUE)
+morro_items_paper_wood <- sum(morro_material$paper_wood, na.rm = TRUE)
+
+#percentage of items by material type
+morro_perc_plastic <- morro_items_plastic/morro_items_total
+morro_perc_glass <- morro_items_glass/morro_items_total
+morro_perc_metal <- morro_items_metal/morro_items_total
+morro_perc_cloth <- morro_items_cloth/morro_items_total
+morro_perc_mixed <- morro_items_mixed/morro_items_total
+morro_perc_paper_wood <- morro_items_paper_wood/morro_items_total
+
+#make a dataframe of Morro Bay material types
+summary_morro_material <- data.frame("morro_material_type" = c('plastic','glass','metal','cloth','mixed','paper_wood'), 
+                           "count" = c(morro_items_plastic, morro_items_glass, morro_items_metal, morro_items_cloth, morro_items_mixed, morro_items_paper_wood), 
+                           "percentage" = c(morro_perc_plastic, morro_perc_glass, morro_perc_metal, morro_perc_cloth, morro_perc_mixed, morro_perc_paper_wood),
+                           "perc" = scales::label_percent(accuracy = 1, scale = 100, prefix = "", suffix = "", big.mark = " ", decimal.mark = ".", trim = TRUE)(c(morro_perc_plastic, morro_perc_glass, morro_perc_metal, morro_perc_cloth, morro_perc_mixed, morro_perc_paper_wood)),
+                          "perc_label" = scales::label_percent(accuracy = 1, scale = 100, prefix = "", suffix = "%", big.mark = " ", decimal.mark = ".", trim = TRUE)(c(morro_perc_plastic, morro_perc_glass, morro_perc_metal, morro_perc_cloth, morro_perc_mixed, morro_perc_paper_wood))
+)
+```
+
+```{r}
+#AVILA BEACH/FIVE CITIES AREA 
+pismo_avila_material <- seg5_and_6 %>% 
+   select(c(id:total_items, plastic:paper_wood))
+
+#item counts by material type 
+pismo_avila_items_total <- sum(pismo_avila_material$total_items, na.rm = TRUE)
+pismo_avila_items_plastic <- sum(pismo_avila_material$plastic, na.rm = TRUE)
+pismo_avila_items_glass <- sum(pismo_avila_material$glass, na.rm = TRUE)
+pismo_avila_items_metal <- sum(pismo_avila_material$metal, na.rm = TRUE)
+pismo_avila_items_cloth <- sum(pismo_avila_material$cloth, na.rm = TRUE)
+pismo_avila_items_mixed <- sum(pismo_avila_material$mixed, na.rm = TRUE)
+pismo_avila_items_paper_wood <- sum(pismo_avila_material$paper_wood, na.rm = TRUE)
+
+#percentage of items by material type
+pismo_avila_perc_plastic <- pismo_avila_items_plastic/pismo_avila_items_total
+pismo_avila_perc_glass <- pismo_avila_items_glass/pismo_avila_items_total
+pismo_avila_perc_metal <- pismo_avila_items_metal/pismo_avila_items_total
+pismo_avila_perc_cloth <- pismo_avila_items_cloth/pismo_avila_items_total
+pismo_avila_perc_mixed <- pismo_avila_items_mixed/pismo_avila_items_total
+pismo_avila_perc_paper_wood <- pismo_avila_items_paper_wood/pismo_avila_items_total
+
+#make a dataframe of Avila Beach/Five Cities material types
+summary_pismo_avila_material <- data.frame("pismo_avila_material_type" = c('plastic','glass','metal','cloth','mixed','paper_wood'), 
+                           "count" = c(pismo_avila_items_plastic, pismo_avila_items_glass, pismo_avila_items_metal, pismo_avila_items_cloth, pismo_avila_items_mixed, pismo_avila_items_paper_wood), 
+                           "percentage" = c(pismo_avila_perc_plastic, pismo_avila_perc_glass, pismo_avila_perc_metal, pismo_avila_perc_cloth, pismo_avila_perc_mixed, pismo_avila_perc_paper_wood),
+                           "perc" = scales::label_percent(accuracy = 1, scale = 100, prefix = "", suffix = "", big.mark = " ", decimal.mark = ".", trim = TRUE)(c(pismo_avila_perc_plastic, pismo_avila_perc_glass, pismo_avila_perc_metal, pismo_avila_perc_cloth, pismo_avila_perc_mixed, pismo_avila_perc_paper_wood)),
+                          "perc_label" = scales::label_percent(accuracy = 1, scale = 100, prefix = "", suffix = "%", big.mark = " ", decimal.mark = ".", trim = TRUE)(c(pismo_avila_perc_plastic, pismo_avila_perc_glass, pismo_avila_perc_metal, pismo_avila_perc_cloth, pismo_avila_perc_mixed, pismo_avila_perc_paper_wood)))
+```
+
+```{r}
+#GAVIOTA 
+gaviota_material <- seg14_data %>% 
+   select(c(id:total_items, plastic:paper_wood))
+
+#item counts by material type 
+gaviota_items_total <- sum(gaviota_material$total_items, na.rm = TRUE)
+gaviota_items_plastic <- sum(gaviota_material$plastic, na.rm = TRUE)
+gaviota_items_glass <- sum(gaviota_material$glass, na.rm = TRUE)
+gaviota_items_metal <- sum(gaviota_material$metal, na.rm = TRUE)
+gaviota_items_cloth <- sum(gaviota_material$cloth, na.rm = TRUE)
+gaviota_items_mixed <- sum(gaviota_material$mixed, na.rm = TRUE)
+gaviota_items_paper_wood <- sum(gaviota_material$paper_wood, na.rm = TRUE)
+
+#percentage of items by material type
+gaviota_perc_plastic <- gaviota_items_plastic/gaviota_items_total
+gaviota_perc_glass <- gaviota_items_glass/gaviota_items_total
+gaviota_perc_metal <- gaviota_items_metal/gaviota_items_total
+gaviota_perc_cloth <- gaviota_items_cloth/gaviota_items_total
+gaviota_perc_mixed <- gaviota_items_mixed/gaviota_items_total
+gaviota_perc_paper_wood <- gaviota_items_paper_wood/gaviota_items_total
+
+#make a dataframe of Gaviota material types
+summary_gaviota_material <- data.frame("gaviota_material_type" = c('plastic','glass','metal','cloth','mixed','paper_wood'), 
+                           "count" = c(gaviota_items_plastic, gaviota_items_glass, gaviota_items_metal, gaviota_items_cloth, gaviota_items_mixed, gaviota_items_paper_wood), 
+                           "percentage" = c(gaviota_perc_plastic, gaviota_perc_glass, gaviota_perc_metal, gaviota_perc_cloth, gaviota_perc_mixed, gaviota_perc_paper_wood),
+                           "perc" = scales::label_percent(accuracy = 1, scale = 100, prefix = "", suffix = "", big.mark = " ", decimal.mark = ".", trim = TRUE)(c(gaviota_perc_plastic, gaviota_perc_glass, gaviota_perc_metal, gaviota_perc_cloth, gaviota_perc_mixed, gaviota_perc_paper_wood)),
+                          "perc_label" = scales::label_percent(accuracy = 1, scale = 100, prefix = "", suffix = "%", big.mark = " ", decimal.mark = ".", trim = TRUE)(c(gaviota_perc_plastic, gaviota_perc_glass, gaviota_perc_metal, gaviota_perc_cloth, gaviota_perc_mixed, gaviota_perc_paper_wood)))
+  
+```
+activity type by hotspot segment 
+```{r}
+#MORRO BAY 
+morro_activity <- seg3_data %>% 
+  select(c(id:total_items, dumping:various)) 
+
+#item counts by activity type
+morro_items_total <- sum(morro_activity$total_items, na.rm = TRUE)
+morro_items_dumping <- sum(morro_activity$dumping, na.rm = TRUE)
+morro_items_eating.drinking <- sum(morro_activity$eating.drinking, na.rm = TRUE)
+morro_items_fishing <- sum(morro_activity$fishing, na.rm = TRUE)
+morro_items_personal.hygiene <- sum(morro_activity$personal.hygiene, na.rm = TRUE)
+morro_items_recreation <- sum(morro_activity$recreation, na.rm = TRUE)
+morro_items_smoking <- sum(morro_activity$smoking, na.rm = TRUE)
+morro_items_various <- sum(morro_activity$various, na.rm = TRUE)
+
+#percentage of items by activity type
+morro_perc_dumping <- morro_items_dumping/morro_items_total
+morro_perc_eating.drinking <- morro_items_eating.drinking/morro_items_total
+morro_perc_fishing <- morro_items_fishing/morro_items_total
+morro_perc_personal.hygiene <- morro_items_personal.hygiene/morro_items_total
+morro_perc_recreation <- morro_items_recreation/morro_items_total
+morro_perc_smoking <- morro_items_smoking/morro_items_total
+morro_perc_various <- morro_items_various/morro_items_total
+
+#make a dataframe of Morro Bay activity types
+morro_summary_activity <- data.frame("morro_activity_type" = c('dumping', 'eating.drinking', 'fishing', 'personal.hygiene', 'recreation', 'smoking', 'various'), 
+                           "count" = c(morro_items_dumping, morro_items_eating.drinking, morro_items_fishing, morro_items_personal.hygiene, morro_items_recreation, morro_items_smoking, morro_items_various), 
+                           "percentage" = c(morro_perc_dumping, morro_perc_eating.drinking, morro_perc_fishing, morro_perc_personal.hygiene, morro_perc_recreation, morro_perc_smoking, morro_perc_various),
+                           "perc" = scales::label_percent(accuracy = 1, scale = 100, prefix = "", suffix = "", big.mark = " ", decimal.mark = ".", trim = TRUE)(c(morro_perc_dumping, morro_perc_eating.drinking, morro_perc_fishing, morro_perc_personal.hygiene, morro_perc_recreation, morro_perc_smoking, morro_perc_various)),
+                          "perc_label" = scales::label_percent(accuracy = 1, scale = 100, prefix = "", suffix = "%", big.mark = " ", decimal.mark = ".", trim = TRUE)(c(morro_perc_dumping, morro_perc_eating.drinking, morro_perc_fishing, morro_perc_personal.hygiene, morro_perc_recreation, morro_perc_smoking, morro_perc_various))
+)
+```
+
+```{r}
+#AVILA BEACH/FIVE CITIES 
+
+pismo_avila_activity <- seg5_and_6 %>% 
+  select(c(id:total_items, dumping:various))
+
+#item counts by activity type
+pismo_avila_items_total <- sum(pismo_avila_activity$total_items, na.rm = TRUE)
+pismo_avila_items_dumping <- sum(pismo_avila_activity$dumping, na.rm = TRUE)
+pismo_avila_items_eating.drinking <- sum(pismo_avila_activity$eating.drinking, na.rm = TRUE)
+pismo_avila_items_fishing <- sum(pismo_avila_activity$fishing, na.rm = TRUE)
+pismo_avila_items_personal.hygiene <- sum(pismo_avila_activity$personal.hygiene, na.rm = TRUE)
+pismo_avila_items_recreation <- sum(pismo_avila_activity$recreation, na.rm = TRUE)
+pismo_avila_items_smoking <- sum(pismo_avila_activity$smoking, na.rm = TRUE)
+pismo_avila_items_various <- sum(pismo_avila_activity$various, na.rm = TRUE)
+
+#percentage of items by activity type
+pismo_avila_perc_dumping <- pismo_avila_items_dumping/pismo_avila_items_total
+pismo_avila_perc_eating.drinking <- pismo_avila_items_eating.drinking/pismo_avila_items_total
+pismo_avila_perc_fishing <- pismo_avila_items_fishing/pismo_avila_items_total
+pismo_avila_perc_personal.hygiene <- pismo_avila_items_personal.hygiene/pismo_avila_items_total
+pismo_avila_perc_recreation <- pismo_avila_items_recreation/pismo_avila_items_total
+pismo_avila_perc_smoking <- pismo_avila_items_smoking/pismo_avila_items_total
+pismo_avila_perc_various <- pismo_avila_items_various/pismo_avila_items_total
+
+#make a dataframe of Avila Beach/Five Cities activity types
+pismo_avila_summary_activity <- data.frame("pismo_avila_activity_type" = c('dumping', 'eating.drinking', 'fishing', 'personal.hygiene', 'recreation', 'smoking', 'various'), 
+                           "count" = c(pismo_avila_items_dumping, pismo_avila_items_eating.drinking, pismo_avila_items_fishing, pismo_avila_items_personal.hygiene, pismo_avila_items_recreation, pismo_avila_items_smoking, pismo_avila_items_various), 
+                           "percentage" = c(pismo_avila_perc_dumping, pismo_avila_perc_eating.drinking, pismo_avila_perc_fishing, pismo_avila_perc_personal.hygiene, pismo_avila_perc_recreation, pismo_avila_perc_smoking, pismo_avila_perc_various),
+                           "perc" = scales::label_percent(accuracy = 1, scale = 100, prefix = "", suffix = "", big.mark = " ", decimal.mark = ".", trim = TRUE)(c(pismo_avila_perc_dumping, pismo_avila_perc_eating.drinking, pismo_avila_perc_fishing, pismo_avila_perc_personal.hygiene, pismo_avila_perc_recreation, pismo_avila_perc_smoking, pismo_avila_perc_various)),
+                          "perc_label" = scales::label_percent(accuracy = 1, scale = 100, prefix = "", suffix = "%", big.mark = " ", decimal.mark = ".", trim = TRUE)(c(pismo_avila_perc_dumping, pismo_avila_perc_eating.drinking, pismo_avila_perc_fishing, pismo_avila_perc_personal.hygiene, pismo_avila_perc_recreation, pismo_avila_perc_smoking, pismo_avila_perc_various))
+)
+```
+
+```{r}
+#GAVIOTA
+gaviota_activity <- seg14_data %>% 
+  select(c(id:total_items, dumping:various))
+
+#item counts by activity type
+gaviota_items_total <- sum(gaviota_activity$total_items, na.rm = TRUE)
+gaviota_items_dumping <- sum(gaviota_activity$dumping, na.rm = TRUE)
+gaviota_items_eating.drinking <- sum(gaviota_activity$eating.drinking, na.rm = TRUE)
+gaviota_items_fishing <- sum(gaviota_activity$fishing, na.rm = TRUE)
+gaviota_items_personal.hygiene <- sum(gaviota_activity$personal.hygiene, na.rm = TRUE)
+gaviota_items_recreation <- sum(gaviota_activity$recreation, na.rm = TRUE)
+gaviota_items_smoking <- sum (gaviota_activity$smoking, na.rm = TRUE)
+gaviota_items_various <- sum(gaviota_activity$various, na.rm = TRUE)
+
+#percentage of items by activity type
+gaviota_perc_dumping <- gaviota_items_dumping/gaviota_items_total
+gaviota_perc_eating.drinking <- gaviota_items_eating.drinking/gaviota_items_total
+gaviota_perc_fishing <- gaviota_items_fishing/gaviota_items_total
+gaviota_perc_personal.hygiene <- gaviota_items_personal.hygiene/gaviota_items_total
+gaviota_perc_recreation <- gaviota_items_recreation/gaviota_items_total
+gaviota_perc_smoking <- gaviota_items_smoking/gaviota_items_total
+gaviota_perc_various <- gaviota_items_various/gaviota_items_total
+
+#make a dataframe of Gaviota activity types
+gaviota_summary_activity <- data.frame("gaviota_activity_type" = c('dumping', 'eating.drinking', 'fishing', 'personal.hygiene', 'recreation', 'smoking', 'various'), 
+                           "count" = c(gaviota_items_dumping, gaviota_items_eating.drinking, gaviota_items_fishing, gaviota_items_personal.hygiene, gaviota_items_recreation, gaviota_items_smoking, gaviota_items_various), 
+                           "percentage" = c(gaviota_perc_dumping, gaviota_perc_eating.drinking, gaviota_perc_fishing, gaviota_perc_personal.hygiene, gaviota_perc_recreation, gaviota_perc_smoking, gaviota_perc_various),
+                           "perc" = scales::label_percent(accuracy = 1, scale = 100, prefix = "", suffix = "", big.mark = " ", decimal.mark = ".", trim = TRUE)(c(gaviota_perc_dumping, gaviota_perc_eating.drinking, gaviota_perc_fishing, gaviota_perc_personal.hygiene, gaviota_perc_recreation, gaviota_perc_smoking, gaviota_perc_various)),
+                          "perc_label" = scales::label_percent(accuracy = 1, scale = 100, prefix = "", suffix = "%", big.mark = " ", decimal.mark = ".", trim = TRUE)(c(gaviota_perc_dumping, gaviota_perc_eating.drinking, gaviota_perc_fishing, gaviota_perc_personal.hygiene, gaviota_perc_recreation, gaviota_perc_smoking, gaviota_perc_various))
+)
+```
+
+#Contingency Tables for Summary Stats
+Material Type 
+```{r}
+###use contingency tables to determine if the breakdown of material type and activity type proportions are different between the three hotspots 
+
+#prep dataframes for combination 
+sum_gaviota_material <- summary_gaviota_material %>% 
+  mutate(material = gaviota_material_type) %>% 
+  mutate(gaviota_count = count) %>% 
+  select(!gaviota_material_type) %>% 
+  select(!count) 
+
+sum_morro_material <- summary_morro_material %>% 
+  mutate(material = morro_material_type) %>% 
+  mutate(morro_count = count) %>% 
+  select(!morro_material_type) %>% 
+  select(!count) 
+
+sum_pismo_avila_material <- summary_pismo_avila_material %>% 
+  mutate(material = pismo_avila_material_type) %>% 
+  mutate(pismo_avila_count = count) %>% 
+  select(!pismo_avila_material_type) %>% 
+  select(!count) 
+
+#combine the dataframes 
+hotspot_material <- sum_gaviota_material %>%
+  left_join(sum_morro_material, by = "material") %>%
+  left_join(sum_pismo_avila_material, by = "material") %>% 
+  select(c(material, morro_count, pismo_avila_count, gaviota_count))
+
+rownames(hotspot_material) <- hotspot_material$material
+hotspot_material <- hotspot_material[, -1]
+#hotspot_material <- hotspot_material[-4, ] #remove cloth to see if that zero affects the results, it doesn't, p value stays the same for both 
+
+#contingency table for material type 
+material_x2 <- chisq.test(hotspot_material) 
+material_x2
+```
+Activity Type 
+```{r}
+#prep dataframes for combination 
+gaviota_act <- gaviota_summary_activity %>% 
+  mutate(activity = gaviota_activity_type) %>% 
+  mutate(gaviota_count = count) %>% 
+  select(!gaviota_activity_type) %>% 
+  select(!count) 
+
+morro_act <- morro_summary_activity %>% 
+  mutate(activity = morro_activity_type) %>% 
+  mutate(morro_count = count) %>% 
+  select(!morro_activity_type) %>% 
+  select(!count) 
+
+pismo_avila_act <- pismo_avila_summary_activity %>% 
+  mutate(activity = pismo_avila_activity_type) %>% 
+  mutate(pismo_avila_count = count) %>% 
+  select(!pismo_avila_activity_type) %>% 
+  select(!count) 
+
+#combine the dataframes 
+hotspot_activity <- gaviota_act %>%
+  left_join(morro_act, by = "activity") %>%
+  left_join(pismo_avila_act, by = "activity") %>% 
+  select(c(activity, morro_count, pismo_avila_count, gaviota_count))
+
+rownames(hotspot_activity) <- hotspot_activity$activity
+hotspot_activity <- hotspot_activity[, -1]
+
+#contingency table for activity type 
+activity_x2 <- chisq.test(hotspot_activity) 
+activity_x2
+```
